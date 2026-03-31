@@ -12,6 +12,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800&family=Barlow:wght@300;400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -240,7 +241,7 @@ select option{background:var(--surface2)}
     <div class="logo">
       <div class="logo-img">
         <div class="logo-badge">ABH</div>
-        <div class="logo-name">PUREAU</div>
+        <div class="logo-name">MAINTENANCE</div>
       </div>
       <div class="logo-sub">Maintenance System</div>
     </div>
@@ -305,10 +306,25 @@ const NAV = [
   { section:'Reporting' },
   { id:'audit',       label:'Completion Audit',        icon:'M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 0 2-2h2a2 2 0 0 0 2 2m-6 9l2 2 4-4' },
   { section:'Admin' },
+  { id:'staff',       label:'Staff Register',          icon:'M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z' },
   { id:'setup',       label:'Setup / Import',         icon:'M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z' },
 ];
 
 const $ = id => document.getElementById(id);
+
+// Preserve search input focus across re-renders
+// Call before any render that rebuilds a search input
+let _pendingFocusId = null;
+function keepFocus(inputId){
+  _pendingFocusId = inputId;
+}
+function restoreFocus(){
+  if(_pendingFocusId){
+    const el = document.getElementById(_pendingFocusId);
+    if(el){ el.focus(); const v=el.value; el.value=''; el.value=v; } // move cursor to end
+    _pendingFocusId = null;
+  }
+}
 const crit = c => ({Critical:'#ef4444',High:'#f97316',Medium:'#eab308',Low:'#22c55e'}[c]||'#8b949e');
 const badge = (t,bg,col) => `<span class="badge" style="background:${bg};color:${col}">${t}</span>`;
 const critBadge = c => badge(c,crit(c)+'22',crit(c));
@@ -326,6 +342,9 @@ function getEligibleStaff(machineId){
   const m=getMachine(machineId);
   if(!m||!state.staff.length) return state.staff;
   return state.staff.filter(function(s){
+    // Exclude departed or on leave staff from all task dropdowns
+    const es=s.employment_status||(s.is_active?'Employed':'Departed');
+    if(es==='Departed'||es==='On Leave') return false;
     // Maintenance Manager (Ravindra) always eligible across all sites
     if(s.can_approve_wo && s.role==='Maintenance Manager') return true;
     // Site must match if both are set
@@ -399,13 +418,13 @@ function renderNav(){
   }).join('');
 }
 
-const PAGE_TITLES={dashboard:'Dashboard',machines:'Machine Register','pm-schedule':'Preventive Maintenance','log-pm':'Log Preventive Task',breakdown:'Raise Breakdown',stock:'Spare Parts',workorders:'Work Order Log',compliance:'Compliance Register',audit:'Completion Audit',setup:'Setup & Data Import'};
+const PAGE_TITLES={dashboard:'Dashboard',machines:'Machine Register','pm-schedule':'Preventive Maintenance','log-pm':'Log Preventive Task',breakdown:'Raise Breakdown',stock:'Spare Parts',workorders:'Work Order Log',compliance:'Compliance Register',audit:'Completion Audit',staff:'Staff Register',setup:'Setup & Data Import'};
 
 function navigate(view){ state.view=view; $('page-title').textContent=PAGE_TITLES[view]||view; renderNav(); closeSidebar(); render(); }
 
 function render(){
   if(!state.loaded){$('content').innerHTML='<div class="loading"><div class="spinner"></div> Loading…</div>';return;}
-  ({dashboard:renderDashboard,machines:renderMachines,'pm-schedule':renderPMSchedule,'log-pm':renderLogPM,breakdown:renderBreakdown,stock:renderStock,workorders:renderWorkOrders,compliance:renderCompliance,audit:renderAudit,setup:renderSetup}[state.view]||renderDashboard)();
+  ({dashboard:renderDashboard,machines:renderMachines,'pm-schedule':renderPMSchedule,'log-pm':renderLogPM,breakdown:renderBreakdown,stock:renderStock,workorders:renderWorkOrders,compliance:renderCompliance,audit:renderAudit,staff:renderStaff,setup:renderSetup}[state.view]||renderDashboard)();
 }
 
 function initDate(){ $('page-date').textContent=new Date().toLocaleDateString('en-AU',{weekday:'long',year:'numeric',month:'long',day:'numeric'}); }
@@ -842,7 +861,7 @@ async function renderAudit(){
         <select style="width:160px" onchange="auditLine=this.value;renderAudit()">
           ${lineOpts.map(l=>`<option value="${l}"${auditLine===l?' selected':''}>${l==='All'?'All Lines':l}</option>`).join('')}
         </select>
-        <input placeholder="Search task or machine…" value="${esc(auditSearch)}" oninput="auditSearch=this.value;renderAudit()" style="width:220px">
+        <input placeholder="Search task or machine…" value="${esc(auditSearch)}" id="search-audit" oninput="auditSearch=this.value;keepFocus('search-audit');renderAudit();restoreFocus()" style="width:220px">
         <button class="btn btn-ghost btn-sm" onclick="auditSite='All';auditLine='All';auditSearch='';auditRange='30';renderAudit()">Clear</button>
       </div>
     </div>
@@ -879,7 +898,7 @@ async function renderAudit(){
 // ══════════════════════════════════════════════════════════
 // MACHINES
 // ══════════════════════════════════════════════════════════
-let machineSearch='',machineSite='All',machineTab='tasks',selectedMachine=null;
+let machineSearch='',machineSite='All',machineTab='tasks',selectedMachine=null,machineXlsxPreview=null,machineImportView=false;
 
 function renderMachines(){
   const siteOptions=['All',...new Set(state.machines.map(m=>m.site_id))].map(sid=>{
@@ -891,12 +910,15 @@ function renderMachines(){
     const qm=!machineSearch||m.name.toLowerCase().includes(machineSearch.toLowerCase())||m.machine_code.toLowerCase().includes(machineSearch.toLowerCase());
     return sm&&qm;
   });
+  if(machineImportView){ renderMachineImportPanel(); return; }
   let html=`<div style="display:grid;grid-template-columns:${selectedMachine?'1fr 360px':'1fr'};gap:18px;align-items:start">
   <div>
     <div class="filter-row">
-      <input placeholder="Search machines…" value="${esc(machineSearch)}" oninput="machineSearch=this.value;renderMachines()">
+      <input placeholder="Search machines…" value="${esc(machineSearch)}" id="search-machines" oninput="machineSearch=this.value;keepFocus('search-machines');renderMachines();restoreFocus()">
       <select onchange="machineSite=this.value;renderMachines()">${siteOptions.map(s=>`<option value="${s.id}"${machineSite===s.id?' selected':''}>${s.label}</option>`).join('')}</select>
       <button class="btn btn-primary btn-sm" onclick="openMachineModal(null)">+ Add Machine</button>
+      <button class="btn btn-ghost btn-sm" onclick="machineImportView=true;machineXlsxPreview=null;renderMachines()">&#x2191; Import Excel</button>
+      <button class="btn btn-ghost btn-sm" onclick="exportMachines()" title="Export current machine register">&#x2193; Export</button>
     </div>
     <div class="machine-grid">
     ${filtered.map(m=>`<div class="mcard${selectedMachine?.id===m.id?' sel':''}" style="border-left-color:${crit(m.criticality)}" onclick="selectMachine('${m.id}')">
@@ -910,6 +932,181 @@ function renderMachines(){
   ${selectedMachine?renderMachinePanel():''}
   </div>`;
   $('content').innerHTML=html;
+}
+
+
+function renderMachineImportPanel(){
+  $('content').innerHTML=`<div style="max-width:760px">
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <div style="font-family:var(--fd);font-size:18px;font-weight:700;color:var(--accent)">Import / Update Machines from Excel</div>
+        <button class="btn btn-ghost btn-sm" onclick="machineImportView=false;machineXlsxPreview=null;renderMachines()">&#x2715; Cancel</button>
+      </div>
+
+      <div style="margin-bottom:16px;background:var(--surface2);border-radius:var(--r);padding:14px">
+        <div style="font-family:var(--fd);font-size:12px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-bottom:8px">How it works</div>
+        <div style="font-size:13px;color:var(--muted);line-height:1.7">
+          &#x2022; <strong style="color:var(--text)">Existing machines</strong> (matched by Machine Code) are <strong style="color:var(--accent)">updated</strong> with the new values from the file.<br>
+          &#x2022; <strong style="color:var(--text)">New machine codes</strong> not in the database are <strong style="color:var(--green)">added</strong> as new machines.<br>
+          &#x2022; Machine Code is the unique key — it must match exactly (e.g. MCH-001).
+        </div>
+      </div>
+
+      <div style="margin-bottom:12px;background:var(--surface2);border-radius:var(--r);padding:12px">
+        <div style="font-family:var(--fd);font-size:12px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-bottom:8px">Expected Columns</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;font-size:12px">
+          ${[['Machine Code','Unique key e.g. MCH-001 — required'],['Name','Full machine name — required'],['Category','Filling / Packaging / Coding etc.'],['Site','Erskine Park or St Marys'],['Location Zone','e.g. Line A, HMPS Line'],['Line Type','cask / bottle / shared'],['OEM Manufacturer','Supplier name'],['Criticality','Critical / High / Medium / Low'],['Status','Active / Under Repair / Awaiting Parts'],['Serial Number','Optional'],['Year Installed','Optional — 4 digit year'],['Notes','Optional']].map(([col,desc])=>`
+            <div style="display:flex;gap:6px"><code style="color:var(--accent2);font-size:11px;flex-shrink:0;min-width:120px">${col}</code><span style="color:var(--muted)">${desc}</span></div>`).join('')}
+        </div>
+      </div>
+
+      ${!machineXlsxPreview?`
+      <div style="border:2px dashed var(--border);border-radius:var(--r);padding:32px;text-align:center"
+           ondragover="event.preventDefault();this.style.borderColor='var(--accent)'"
+           ondragleave="this.style.borderColor='var(--border)'"
+           ondrop="event.preventDefault();this.style.borderColor='var(--border)';handleMachineXlsx(event.dataTransfer.files[0])">
+        <div style="font-size:32px;margin-bottom:8px">&#x1F4C1;</div>
+        <div style="font-weight:600;margin-bottom:4px">Drag & drop your Excel file here</div>
+        <div style="color:var(--muted);font-size:13px;margin-bottom:16px">.xlsx or .xls files only</div>
+        <input type="file" id="machine-xlsx-input" accept=".xlsx,.xls" style="display:none" onchange="handleMachineXlsx(this.files[0])">
+        <button class="btn btn-primary" onclick="$('machine-xlsx-input').click()">Browse Files</button>
+      </div>
+      <div style="text-align:center;margin-top:12px">
+        <button class="btn btn-ghost btn-sm" onclick="exportMachines()">&#x2193; Download current machine register first</button>
+      </div>`
+      :renderMachineXlsxPreview()}
+    </div>
+  </div>`;
+}
+
+function renderMachineXlsxPreview(){
+  const {rows,updates,additions} = machineXlsxPreview;
+  return`
+    <div style="margin-bottom:12px;display:flex;gap:10px;flex-wrap:wrap">
+      ${additions.length?`<span class="badge" style="background:rgba(34,197,94,.12);color:#22c55e;font-size:12px">&#x2795; ${additions.length} new machine${additions.length!==1?'s':''} to add</span>`:''}
+      ${updates.length?`<span class="badge" style="background:rgba(240,180,41,.15);color:var(--accent);font-size:12px">&#x270E; ${updates.length} existing machine${updates.length!==1?'s':''} to update</span>`:''}
+      ${!additions.length&&!updates.length?'<span class="badge" style="background:rgba(139,148,158,.15);color:#8b949e">No changes detected</span>':''}
+    </div>
+
+    <div style="border:1px solid var(--border);border-radius:var(--r);overflow:hidden;margin-bottom:16px">
+      <div style="display:grid;grid-template-columns:90px 1fr 100px 110px 120px 80px;background:var(--navy)">
+        ${['Code','Name','Category','Site','Status','Action'].map(h=>`<div style="padding:8px 12px;font-family:var(--fd);font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:rgba(255,255,255,.6)">${h}</div>`).join('')}
+      </div>
+      ${rows.map((r,ri)=>{
+        const isNew=additions.includes(r.machine_code);
+        const isUpdate=updates.includes(r.machine_code);
+        return`<div style="display:grid;grid-template-columns:90px 1fr 100px 110px 120px 80px;border-bottom:1px solid rgba(48,54,61,.4);background:${ri%2===0?'transparent':'rgba(255,255,255,.02)'}">
+          <div style="padding:8px 12px;font-family:monospace;font-size:11px;color:var(--accent2)">${esc(r.machine_code)}</div>
+          <div style="padding:8px 12px;font-size:12px;font-weight:500">${esc(r.name)}</div>
+          <div style="padding:8px 12px;font-size:11px;color:var(--muted)">${esc(r.category||'')}</div>
+          <div style="padding:8px 12px;font-size:11px;color:var(--muted)">${esc(r.site_name||'')}</div>
+          <div style="padding:8px 12px;font-size:11px;color:var(--muted)">${esc(r.status||'')}</div>
+          <div style="padding:8px 12px">
+            ${isNew?'<span class="badge" style="background:rgba(34,197,94,.12);color:#22c55e;font-size:10px">NEW</span>':''}
+            ${isUpdate?'<span class="badge" style="background:rgba(240,180,41,.15);color:var(--accent);font-size:10px">UPDATE</span>':''}
+          </div>
+        </div>`;
+      }).join('')}
+    </div>
+
+    <div style="display:flex;gap:10px">
+      ${(additions.length||updates.length)?`<button class="btn btn-primary" onclick="confirmMachineImport()" id="confirm-machine-import-btn">
+        Import ${additions.length+updates.length} Machine${additions.length+updates.length!==1?'s':''}
+      </button>`:''}
+      <button class="btn btn-ghost" onclick="machineXlsxPreview=null;renderMachineImportPanel()">Upload Different File</button>
+      <button class="btn btn-ghost" onclick="machineImportView=false;machineXlsxPreview=null;renderMachines()">Cancel</button>
+    </div>`;
+}
+
+async function handleMachineXlsx(file){
+  if(!file)return;
+  if(!file.name.match(/\.xlsx?$/i)){showToast('Please upload an .xlsx or .xls file.','error');return;}
+  const reader=new FileReader();
+  reader.onload=async function(e){
+    try{
+      const wb=window.XLSX.read(e.target.result,{type:'array'});
+      const ws=wb.Sheets[wb.SheetNames[0]];
+      const data=window.XLSX.utils.sheet_to_json(ws,{defval:''});
+      if(!data.length){showToast('No data found in spreadsheet.','error');return;}
+
+      const norm=key=>key.toLowerCase().replace(/[^a-z0-9]/g,'');
+      const getVal=(row,candidates)=>{
+        for(const k of Object.keys(row)){
+          if(candidates.includes(norm(k)))return String(row[k]).trim();
+        }
+        return'';
+      };
+
+      const rows=data.map(row=>({
+        machine_code: getVal(row,['machinecode','code','machine_code','mchcode','machcode']),
+        name:         getVal(row,['name','machinename','machine_name','description']),
+        category:     getVal(row,['category','cat']),
+        site_name:    getVal(row,['site','sitename','site_name']),
+        location_zone:getVal(row,['locationzone','location_zone','zone','line','location']),
+        line_type:    getVal(row,['linetype','line_type']),
+        oem_manufacturer: getVal(row,['oemmanufacturer','oem_manufacturer','oem','manufacturer']),
+        criticality:  getVal(row,['criticality','critical','crit'])||'High',
+        status:       getVal(row,['status'])||'Active',
+        serial_number:getVal(row,['serialnumber','serial_number','serial']),
+        year_installed:getVal(row,['yearinstalled','year_installed','year']),
+        notes:        getVal(row,['notes','note','comments']),
+      })).filter(r=>r.machine_code&&r.name);
+
+      const existingCodes=new Set(state.machines.map(m=>m.machine_code));
+      const updates=rows.filter(r=>existingCodes.has(r.machine_code)).map(r=>r.machine_code);
+      const additions=rows.filter(r=>!existingCodes.has(r.machine_code)).map(r=>r.machine_code);
+
+      machineXlsxPreview={rows,updates,additions};
+      renderMachineImportPanel();
+    }catch(err){showToast('Error reading file: '+err.message,'error');}
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+async function confirmMachineImport(){
+  const btn=$('confirm-machine-import-btn');
+  if(btn){btn.disabled=true;btn.innerHTML='<div class="spinner"></div> Importing…';}
+  const {rows,updates,additions}=machineXlsxPreview;
+  let ok=0,fail=0;
+
+  for(const r of rows){
+    // Resolve site_id from name
+    const site=state.sites.find(s=>s.name.toLowerCase()===r.site_name.toLowerCase())||
+                state.sites.find(s=>s.name.toLowerCase().includes(r.site_name.toLowerCase()));
+    const payload={
+      name:r.name, category:r.category||null,
+      site_id:site?.id||null,
+      location_zone:r.location_zone||null,
+      line_type:r.line_type||null,
+      oem_manufacturer:r.oem_manufacturer||null,
+      criticality:r.criticality||'High',
+      status:r.status||'Active',
+      serial_number:r.serial_number||null,
+      year_installed:r.year_installed?parseInt(r.year_installed):null,
+      notes:r.notes||null,
+      is_active:true,
+    };
+
+    if(updates.includes(r.machine_code)){
+      // Update existing
+      const existing=state.machines.find(m=>m.machine_code===r.machine_code);
+      if(existing){
+        const {error}=await sb.from('machines').update(payload).eq('id',existing.id);
+        if(error)fail++;else ok++;
+      }
+    } else {
+      // Insert new
+      const {error}=await sb.from('machines').insert({...payload,machine_code:r.machine_code});
+      if(error)fail++;else ok++;
+    }
+  }
+
+  // Refresh state
+  const fresh=await sb.from('machines').select('*').order('machine_code');
+  state.machines=fresh.data||[];
+  showToast(`Done — ${ok} machines updated/added.${fail?` ${fail} failed.`:''}`);
+  machineImportView=false; machineXlsxPreview=null;
+  renderMachines();
 }
 
 function selectMachine(id){ selectedMachine=state.machines.find(m=>m.id===id)||null; machineTab='tasks'; renderMachines(); }
@@ -1019,6 +1216,9 @@ async function submitBreakdown(){
 // SPARE PARTS
 // ══════════════════════════════════════════════════════════
 let stockSearch='',stockFilter='All',editingPart=null,editQty='',editReason='Adjustment';
+let stockView='list'; // 'list' | 'add' | 'import'
+let newPartForm={part_code:'',name:'',machine_id:'',criticality:'High',min_qty:'1',max_qty:'5',current_qty:'0',bin_location:'',is_consumable:false};
+let xlsxPreview=null; // { rows, conflicts }
 
 function renderStock(){
   const filtered=state.spareParts.filter(p=>{
@@ -1029,26 +1229,307 @@ function renderStock(){
   });
   const out=state.spareParts.filter(p=>p.current_qty<=0).length;
   const low=state.spareParts.filter(p=>p.current_qty>0&&p.current_qty<=p.min_qty).length;
+
+  let mainContent='';
+
+  if(stockView==='add'){
+    mainContent=renderAddPartForm();
+  } else if(stockView==='import'){
+    mainContent=renderImportPanel();
+  } else {
+    mainContent=`
+    <div class="card">
+      <div class="filter-row">
+        <input placeholder="Search parts or code…" value="${esc(stockSearch)}" id="search-stock" oninput="stockSearch=this.value;keepFocus('search-stock');renderStock();restoreFocus()">
+        <select onchange="stockFilter=this.value;renderStock()">
+          <option${stockFilter==='All'?' selected':''}>All</option>
+          <option${stockFilter==='Alerts'?' selected':''}>Alerts</option>
+          <option${stockFilter==='Out'?' selected':''}>Out</option>
+        </select>
+        <button class="btn btn-primary btn-sm" onclick="stockView='add';renderStock()">+ Add Part</button>
+        <button class="btn btn-ghost btn-sm" onclick="stockView='import';xlsxPreview=null;renderStock()">&#x2191; Import Excel</button>
+        <button class="btn btn-ghost btn-sm" onclick="downloadPartsTemplate()" title="Download Excel template">&#x2193; Template</button>
+      </div>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Part</th><th>Machine</th><th>Bin</th><th>Crit.</th><th>Qty</th><th>Min</th><th>Status</th><th>Action</th></tr></thead>
+        <tbody>${filtered.map(p=>{
+          const m=getMachine(p.machine_id);const isEditing=editingPart===p.id;
+          return`<tr>
+            <td><div style="font-weight:500">${esc(p.name)}</div><div style="font-size:10px;color:var(--muted);font-family:monospace">${esc(p.part_code||'')}</div></td>
+            <td style="font-size:12px;color:var(--muted)">${esc(m?.name||'General')}</td>
+            <td><code style="font-size:11px;color:var(--accent2)">${esc(p.bin_location||'—')}</code></td>
+            <td>${critBadge(p.criticality)}</td>
+            <td style="font-family:var(--fd);font-size:20px;font-weight:800;color:${p.current_qty<=0?'var(--red)':p.current_qty<=p.min_qty?'var(--orange)':'var(--text)'}">${p.current_qty}</td>
+            <td style="color:var(--muted)">${p.min_qty}</td>
+            <td>${stockBadge(p)}</td>
+            <td>${isEditing?`
+              <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+                <input type="number" value="${editQty}" onchange="editQty=this.value" style="width:64px">
+                <select onchange="editReason=this.value" style="width:110px">${['Receipt','Adjustment','Return','Write Off'].map(r=>`<option${editReason===r?' selected':''}>${r}</option>`).join('')}</select>
+                <button class="btn btn-primary btn-sm" onclick="saveStock('${p.id}',${p.current_qty})">Save</button>
+                <button class="btn btn-ghost btn-sm" onclick="editingPart=null;renderStock()">&#x2715;</button>
+              </div>`
+              :`<button class="btn btn-ghost btn-sm" onclick="editingPart='${p.id}';editQty='${p.current_qty}';editReason='Adjustment';renderStock()">Update Qty</button>`}
+            </td>
+          </tr>`;
+        }).join('')}${!filtered.length?'<tr><td colspan="8" class="empty">No parts match.</td></tr>':''}</tbody>
+      </table></div>
+    </div>`;
+  }
+
   $('content').innerHTML=`
   <div class="stat-grid" style="grid-template-columns:repeat(3,1fr)">
     <div class="stat ${out?'alert-card':'ok-card'}"><div class="stat-num" style="color:${out?'var(--red)':'var(--green)'}">${out}</div><div class="stat-label">Out of Stock</div></div>
     <div class="stat ${low?'warn-card':'ok-card'}"><div class="stat-num" style="color:${low?'var(--orange)':'var(--green)'}">${low}</div><div class="stat-label">Below Minimum</div></div>
     <div class="stat"><div class="stat-num" style="color:var(--accent)">${state.spareParts.length}</div><div class="stat-label">Total Part Lines</div></div>
   </div>
-  <div class="card">
-    <div class="filter-row">
-      <input placeholder="Search parts or code…" value="${esc(stockSearch)}" oninput="stockSearch=this.value;renderStock()">
-      <select onchange="stockFilter=this.value;renderStock()"><option${stockFilter==='All'?' selected':''}>All</option><option${stockFilter==='Alerts'?' selected':''}>Alerts</option><option${stockFilter==='Out'?' selected':''}>Out</option></select>
+  ${mainContent}`;
+}
+
+function renderAddPartForm(){
+  const f=newPartForm;
+  return`<div class="card" style="max-width:600px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <div style="font-family:var(--fd);font-size:18px;font-weight:700;color:var(--accent)">Add New Spare Part</div>
+      <button class="btn btn-ghost btn-sm" onclick="stockView='list';renderStock()">&#x2715; Cancel</button>
     </div>
-    <div class="tbl-wrap"><table class="tbl">
-      <thead><tr><th>Part</th><th>Machine</th><th>Bin</th><th>Crit.</th><th>Qty</th><th>Min</th><th>Status</th><th>Action</th></tr></thead>
-      <tbody>${filtered.map(p=>{
-        const m=getMachine(p.machine_id);const isEditing=editingPart===p.id;
-        return`<tr><td><div style="font-weight:500">${esc(p.name)}</div><div style="font-size:10px;color:var(--muted);font-family:monospace">${esc(p.part_code||'')}</div></td><td style="font-size:12px;color:var(--muted)">${esc(m?.name||'General')}</td><td><code style="font-size:11px;color:var(--accent2)">${esc(p.bin_location||'—')}</code></td><td>${critBadge(p.criticality)}</td><td style="font-family:var(--fd);font-size:20px;font-weight:800;color:${p.current_qty<=0?'var(--red)':p.current_qty<=p.min_qty?'var(--orange)':'var(--text)'}">${p.current_qty}</td><td style="color:var(--muted)">${p.min_qty}</td><td>${stockBadge(p)}</td>
-        <td>${isEditing?`<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><input type="number" value="${editQty}" onchange="editQty=this.value" style="width:64px"><select onchange="editReason=this.value" style="width:110px">${['Receipt','Adjustment','Return','Write Off'].map(r=>`<option${editReason===r?' selected':''}>${r}</option>`).join('')}</select><button class="btn btn-primary btn-sm" onclick="saveStock('${p.id}',${p.current_qty})">Save</button><button class="btn btn-ghost btn-sm" onclick="editingPart=null;renderStock()">&#x2715;</button></div>`:`<button class="btn btn-ghost btn-sm" onclick="editingPart='${p.id}';editQty='${p.current_qty}';editReason='Adjustment';renderStock()">Update Qty</button>`}</td></tr>`;
-      }).join('')}${!filtered.length?'<tr><td colspan="8" class="empty">No parts match.</td></tr>':''}</tbody>
-    </table></div>
+    <div class="form-grid">
+      <div class="fg"><label>Part Code *</label><input value="${esc(f.part_code)}" onchange="newPartForm.part_code=this.value" placeholder="e.g. SP-019"></div>
+      <div class="fg full"><label>Part Name *</label><input value="${esc(f.name)}" onchange="newPartForm.name=this.value" placeholder="Full description of the part"></div>
+      <div class="fg full"><label>Machine</label>
+        <select onchange="newPartForm.machine_id=this.value">
+          <option value="">— General / Not machine-specific —</option>
+          ${state.machines.map(m=>`<option value="${m.id}"${f.machine_id===m.id?' selected':''}>${esc(m.machine_code)} — ${esc(m.name)}</option>`).join('')}
+        </select>
+      </div>
+      <div class="fg"><label>Criticality</label>
+        <select onchange="newPartForm.criticality=this.value">
+          ${['Critical','High','Medium','Low'].map(c=>`<option${f.criticality===c?' selected':''}>${c}</option>`).join('')}
+        </select>
+      </div>
+      <div class="fg"><label>Bin Location</label><input value="${esc(f.bin_location)}" onchange="newPartForm.bin_location=this.value" placeholder="e.g. SH-A-04"></div>
+      <div class="fg"><label>Min Qty</label><input type="number" min="0" value="${f.min_qty}" onchange="newPartForm.min_qty=this.value"></div>
+      <div class="fg"><label>Max Qty</label><input type="number" min="0" value="${f.max_qty}" onchange="newPartForm.max_qty=this.value"></div>
+      <div class="fg"><label>Current Qty on Hand</label><input type="number" min="0" value="${f.current_qty}" onchange="newPartForm.current_qty=this.value"></div>
+      <div class="fg"><label>Consumable?</label>
+        <select onchange="newPartForm.is_consumable=this.value==='Yes'">
+          <option${!f.is_consumable?' selected':''}>No</option>
+          <option${f.is_consumable?' selected':''}>Yes</option>
+        </select>
+      </div>
+    </div>
+    <div style="margin-top:16px;display:flex;gap:10px">
+      <button class="btn btn-primary" onclick="saveNewPart()" id="save-part-btn">Add Spare Part</button>
+      <button class="btn btn-ghost" onclick="stockView='list';renderStock()">Cancel</button>
+    </div>
   </div>`;
+}
+
+function renderImportPanel(){
+  return`<div class="card" style="max-width:700px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <div style="font-family:var(--fd);font-size:18px;font-weight:700;color:var(--accent)">Import Spare Parts from Excel</div>
+      <button class="btn btn-ghost btn-sm" onclick="stockView='list';xlsxPreview=null;renderStock()">&#x2715; Cancel</button>
+    </div>
+
+    ${!xlsxPreview?`
+    <div style="margin-bottom:16px;background:var(--surface2);border-radius:var(--r);padding:14px">
+      <div style="font-family:var(--fd);font-size:12px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-bottom:8px">Required Excel Columns</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:12px">
+        ${[['Part Code','Unique code e.g. SP-019'],['Part Name','Full description'],['Machine Code','e.g. MCH-001 (or blank)'],['Machine Name','Alternative to Machine Code'],['Criticality','Critical / High / Medium / Low'],['Min Qty','Minimum stock level'],['Max Qty','Maximum stock level'],['Current Qty','Stock on hand now'],['Bin Location','e.g. SH-A-04 (optional)'],['Is Consumable','Yes / No (optional)']].map(([col,desc])=>`
+          <div style="display:flex;gap:6px">
+            <code style="color:var(--accent2);font-size:11px;flex-shrink:0">${col}</code>
+            <span style="color:var(--muted)">${desc}</span>
+          </div>`).join('')}
+      </div>
+    </div>
+    <div style="border:2px dashed var(--border);border-radius:var(--r);padding:32px;text-align:center;margin-bottom:16px;transition:border-color .15s" 
+         id="drop-zone"
+         ondragover="event.preventDefault();this.style.borderColor='var(--accent)'"
+         ondragleave="this.style.borderColor='var(--border)'"
+         ondrop="event.preventDefault();this.style.borderColor='var(--border)';handleXlsxFile(event.dataTransfer.files[0])">
+      <div style="font-size:32px;margin-bottom:8px">&#x1F4C1;</div>
+      <div style="font-weight:600;margin-bottom:4px">Drag & drop your Excel file here</div>
+      <div style="color:var(--muted);font-size:13px;margin-bottom:16px">or click to browse — .xlsx or .xls files only</div>
+      <input type="file" id="xlsx-file-input" accept=".xlsx,.xls" style="display:none" onchange="handleXlsxFile(this.files[0])">
+      <button class="btn btn-primary" onclick="$('xlsx-file-input').click()">Browse Files</button>
+    </div>
+    <div style="text-align:center">
+      <button class="btn btn-ghost btn-sm" onclick="downloadPartsTemplate()">&#x2193; Download blank template first</button>
+    </div>`
+    :renderXlsxPreview()}
+  </div>`;
+}
+
+function renderXlsxPreview(){
+  const {rows, conflicts} = xlsxPreview;
+  const newRows = rows.filter(r=>!conflicts.includes(r.part_code));
+  const conflictRows = rows.filter(r=>conflicts.includes(r.part_code));
+
+  return`
+    <div style="margin-bottom:12px;display:flex;gap:10px;flex-wrap:wrap">
+      <span class="badge" style="background:rgba(34,197,94,.12);color:#22c55e;font-size:12px">${newRows.length} new parts</span>
+      ${conflictRows.length?`<span class="badge" style="background:rgba(249,115,22,.15);color:#f97316;font-size:12px">${conflictRows.length} conflicts (part code already exists)</span>`:''}
+    </div>
+
+    ${conflictRows.length?`
+    <div style="margin-bottom:16px">
+      <div style="font-family:var(--fd);font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--orange);margin-bottom:8px">&#9888; Conflicts — these part codes already exist. They will be skipped.</div>
+      <div style="background:rgba(249,115,22,.08);border:1px solid rgba(249,115,22,.3);border-radius:var(--r);overflow:hidden">
+        <table class="tbl" style="font-size:12px">
+          <thead><tr><th>Part Code</th><th>Name in file</th><th>Existing name</th></tr></thead>
+          <tbody>${conflictRows.map(r=>{
+            const existing=state.spareParts.find(p=>p.part_code===r.part_code);
+            return`<tr><td style="font-family:monospace;color:var(--orange)">${esc(r.part_code)}</td><td>${esc(r.name)}</td><td style="color:var(--muted)">${esc(existing?.name||'')}</td></tr>`;
+          }).join('')}</tbody>
+        </table>
+      </div>
+    </div>`:''}
+
+    <div style="margin-bottom:16px">
+      <div style="font-family:var(--fd);font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--green);margin-bottom:8px">&#10003; New parts to import</div>
+      ${newRows.length?`<div style="border:1px solid var(--border);border-radius:var(--r);overflow:hidden">
+        <table class="tbl" style="font-size:12px">
+          <thead><tr><th>Code</th><th>Name</th><th>Machine</th><th>Crit.</th><th>Min</th><th>Current</th><th>Bin</th></tr></thead>
+          <tbody>${newRows.map(r=>`<tr>
+            <td style="font-family:monospace;color:var(--accent2)">${esc(r.part_code)}</td>
+            <td>${esc(r.name)}</td>
+            <td style="font-size:11px;color:var(--muted)">${esc(r.machine_name||'General')}</td>
+            <td>${critBadge(r.criticality||'Medium')}</td>
+            <td>${r.min_qty||0}</td>
+            <td>${r.current_qty||0}</td>
+            <td style="font-family:monospace;font-size:11px;color:var(--accent2)">${esc(r.bin_location||'—')}</td>
+          </tr>`).join('')}</tbody>
+        </table>
+      </div>`:`<div class="empty" style="padding:16px">No new parts to import — all part codes already exist.</div>`}
+    </div>
+
+    <div style="display:flex;gap:10px">
+      ${newRows.length?`<button class="btn btn-primary" onclick="confirmXlsxImport()" id="confirm-import-btn">Import ${newRows.length} New Part${newRows.length!==1?'s':''}</button>`:''}
+      <button class="btn btn-ghost" onclick="xlsxPreview=null;renderStock()">Upload Different File</button>
+      <button class="btn btn-ghost" onclick="stockView='list';xlsxPreview=null;renderStock()">Cancel</button>
+    </div>`;
+}
+
+async function handleXlsxFile(file){
+  if(!file)return;
+  if(!file.name.match(/\.xlsx?$/i)){showToast('Please upload an .xlsx or .xls file.','error');return;}
+
+  const reader=new FileReader();
+  reader.onload=async function(e){
+    try{
+      // SheetJS loaded in <head>
+      const wb=window.XLSX.read(e.target.result,{type:'array'});
+      const ws=wb.Sheets[wb.SheetNames[0]];
+      const data=window.XLSX.utils.sheet_to_json(ws,{defval:''});
+
+      if(!data.length){showToast('No data found in spreadsheet.','error');return;}
+
+      // Normalise column names — case insensitive, trim spaces
+      const norm=key=>key.toLowerCase().replace(/[^a-z0-9]/g,'');
+      const getVal=(row,candidates)=>{
+        for(const k of Object.keys(row)){
+          if(candidates.includes(norm(k))) return String(row[k]).trim();
+        }
+        return '';
+      };
+
+      const rows=data.map((row,i)=>{
+        const partCode=getVal(row,['partcode','partno','code','part_code','partcode']);
+        const name=getVal(row,['partname','name','description','part_name','partname']);
+        const machineCode=getVal(row,['machinecode','machine_code','machinecode','mchcode']);
+        const machineName=getVal(row,['machinename','machine_name','machinename','machine']);
+        // Match machine by code first, then name
+        const machine=state.machines.find(m=>
+          (machineCode&&m.machine_code.toLowerCase()===machineCode.toLowerCase())||
+          (machineName&&m.name.toLowerCase()===machineName.toLowerCase())
+        );
+        return{
+          _row:i+2,
+          part_code:partCode||`IMPORT-${i+1}`,
+          name:name||'Unknown Part',
+          machine_id:machine?.id||null,
+          machine_name:machine?.name||machineName||machineCode||'',
+          criticality:getVal(row,['criticality','critical','crit'])||'High',
+          min_qty:parseInt(getVal(row,['minqty','min_qty','minimum','minstock']))||1,
+          max_qty:parseInt(getVal(row,['maxqty','max_qty','maximum','maxstock']))||5,
+          current_qty:parseInt(getVal(row,['currentqty','current_qty','qty','quantity','onhand','currentstock']))||0,
+          bin_location:getVal(row,['binlocation','bin_location','bin','location','shelf'])||'',
+          is_consumable:['yes','true','1'].includes(getVal(row,['isconsumable','consumable','is_consumable']).toLowerCase()),
+        };
+      }).filter(r=>r.part_code&&r.name);
+
+      // Find conflicts
+      const existingCodes=new Set(state.spareParts.map(p=>p.part_code));
+      const conflicts=rows.filter(r=>existingCodes.has(r.part_code)).map(r=>r.part_code);
+
+      xlsxPreview={rows,conflicts};
+      renderStock();
+    } catch(err){
+      showToast('Error reading file: '+err.message,'error');
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+async function confirmXlsxImport(){
+  const btn=$('confirm-import-btn');
+  if(!btn)return;
+  btn.disabled=true;btn.innerHTML='<div class="spinner"></div> Importing…';
+  const {rows,conflicts}=xlsxPreview;
+  const newRows=rows.filter(r=>!conflicts.includes(r.part_code));
+  let ok=0,fail=0;
+  for(const r of newRows){
+    const {error}=await sb.from('spare_parts').insert({
+      part_code:r.part_code, name:r.name, machine_id:r.machine_id||null,
+      criticality:r.criticality, min_qty:r.min_qty, max_qty:r.max_qty,
+      current_qty:r.current_qty, bin_location:r.bin_location||null,
+      is_consumable:r.is_consumable||false, nsf_h1_certified:false,
+    });
+    if(error)fail++;else ok++;
+  }
+  const fresh=await sb.from('spare_parts').select('*').order('part_code');
+  state.spareParts=fresh.data||[];
+  state.stockAlerts=state.spareParts.filter(p=>p.current_qty<=p.min_qty).length;
+  showToast(`Imported ${ok} parts.${fail?` ${fail} failed.`:''}`);
+  xlsxPreview=null; stockView='list';
+  renderNav(); renderStock();
+}
+
+async function saveNewPart(){
+  const f=newPartForm;
+  if(!f.part_code||!f.name){showToast('Part code and name are required.','error');return;}
+  const existing=state.spareParts.find(p=>p.part_code===f.part_code);
+  if(existing){showToast(`Part code ${f.part_code} already exists.`,'error');return;}
+  const btn=$('save-part-btn');btn.disabled=true;btn.innerHTML='<div class="spinner"></div> Saving…';
+  const {data,error}=await sb.from('spare_parts').insert({
+    part_code:f.part_code.trim(), name:f.name.trim(),
+    machine_id:f.machine_id||null, criticality:f.criticality,
+    min_qty:parseInt(f.min_qty)||1, max_qty:parseInt(f.max_qty)||5,
+    current_qty:parseInt(f.current_qty)||0,
+    bin_location:f.bin_location||null, is_consumable:f.is_consumable||false,
+    nsf_h1_certified:false,
+  }).select().single();
+  if(error){showToast('Error: '+error.message,'error');btn.disabled=false;btn.textContent='Add Spare Part';return;}
+  state.spareParts.push(data);
+  state.stockAlerts=state.spareParts.filter(p=>p.current_qty<=p.min_qty).length;
+  showToast(`${data.name} added.`);
+  newPartForm={part_code:'',name:'',machine_id:'',criticality:'High',min_qty:'1',max_qty:'5',current_qty:'0',bin_location:'',is_consumable:false};
+  stockView='list'; renderNav(); renderStock();
+}
+
+function downloadPartsTemplate(){
+  // Generate a CSV template — no library needed
+  const headers=['Part Code','Part Name','Machine Code','Machine Name','Criticality','Min Qty','Max Qty','Current Qty','Bin Location','Is Consumable'];
+  const example=['SP-019','Example Part Name','MCH-001','Scholle Filler Line A','High','2','6','3','SH-A-05','No'];
+  const csv=[headers,example].map(r=>r.map(c=>`"${c}"`).join(',')).join('\n');
+  const blob=new Blob([csv],{type:'text/csv'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url; a.download='ABH_Spare_Parts_Import_Template.csv';
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a); URL.revokeObjectURL(url);
+  showToast('Template downloaded.');
 }
 
 async function saveStock(partId,currentQty){
@@ -1076,7 +1557,7 @@ function renderWorkOrders(){
   $('content').innerHTML=`<div style="display:grid;grid-template-columns:${selectedWO?'1fr 340px':'1fr'};gap:18px;align-items:start">
     <div class="card">
       <div class="filter-row">
-        <input placeholder="Search WO, machine, task…" value="${esc(woSearch)}" oninput="woSearch=this.value;renderWorkOrders()">
+        <input placeholder="Search WO, machine, task…" value="${esc(woSearch)}" id="search-wo" oninput="woSearch=this.value;keepFocus('search-wo');renderWorkOrders();restoreFocus()">
         <select onchange="woType=this.value;renderWorkOrders()" style="width:130px"><option${woType==='All'?' selected':''}>All</option><option value="PM"${woType==='PM'?' selected':''}>Preventive</option><option${woType==='Breakdown'?' selected':''}>Breakdown</option></select>
         <select onchange="woStatus=this.value;renderWorkOrders()" style="width:140px"><option value="All"${woStatus==='All'?' selected':''}>All Status</option><option${woStatus==='Open'?' selected':''}>Open</option><option${woStatus==='Closed'?' selected':''}>Closed</option><option value="In Progress"${woStatus==='In Progress'?' selected':''}>In Progress</option><option value="Awaiting Parts"${woStatus==='Awaiting Parts'?' selected':''}>Awaiting Parts</option></select>
       </div>
@@ -1129,64 +1610,296 @@ async function renderCompliance(){
   </tbody></table></div></div>`;
 }
 
+
+// ══════════════════════════════════════════════════════════
+// STAFF REGISTER
+// ══════════════════════════════════════════════════════════
+let staffSearch='', staffFilter='Employed', staffSite='All', staffLine='All', staffEditId=null;
+let staffForm={employee_id:'',name:'',role:'Operator',site_id:'',line_type:'all',is_active:true,employment_status:'Employed',can_approve_wo:false};
+
+function renderStaff(){
+  const filtered=state.staff.filter(s=>{
+    const ms=!staffSearch||s.name.toLowerCase().includes(staffSearch.toLowerCase())||(s.employee_id||'').includes(staffSearch);
+    const es=s.employment_status||(s.is_active?'Employed':'Departed');
+    const fs=staffFilter==='All'||es===staffFilter;
+    const ss=staffSite==='All'||s.site_id===staffSite;
+    const ls=staffLine==='All'||s.line_type===staffLine;
+    return ms&&fs&&ss&&ls;
+  });
+
+  const active=state.staff.filter(s=>s.is_active).length;
+  const inactive=state.staff.filter(s=>!s.is_active).length;
+
+  const lineLabel={cask:'Cask Line',bottle:'Bottle Line',all:'All Lines',none:'Non-Production'};
+  const roleColor={Operator:'rgba(14,124,206,.15)','Maintenance Manager':'rgba(240,180,41,.15)','Production Manager':'rgba(34,197,94,.15)'};
+  const roleText={Operator:'#0E7CCE','Maintenance Manager':'#f0b429','Production Manager':'#22c55e'};
+
+  $('content').innerHTML=`
+    <div class="stat-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:16px">
+      <div class="stat ok-card"><div class="stat-num" style="color:var(--green)">${active}</div><div class="stat-label">Active Staff</div></div>
+      <div class="stat"><div class="stat-num" style="color:var(--muted)">${inactive}</div><div class="stat-label">Inactive</div></div>
+      <div class="stat"><div class="stat-num" style="color:var(--accent)">${state.staff.length}</div><div class="stat-label">Total Records</div></div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 340px;gap:18px;align-items:start">
+      <div class="card" style="padding:0;overflow:hidden">
+        <div style="padding:14px 18px;border-bottom:1px solid var(--border);display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <input placeholder="Search name or employee ID…" value="${esc(staffSearch)}" id="search-staff" oninput="staffSearch=this.value;keepFocus('search-staff');renderStaff();restoreFocus()" style="flex:1;min-width:180px">
+          <select onchange="staffSite=this.value;renderStaff()" style="width:150px">
+            <option value="All"${staffSite==='All'?' selected':''}>All Sites</option>
+            ${state.sites.map(s=>`<option value="${s.id}"${staffSite===s.id?' selected':''}>${esc(s.name)}</option>`).join('')}
+          </select>
+          <select onchange="staffLine=this.value;renderStaff()" style="width:140px">
+            <option value="All"${staffLine==='All'?' selected':''}>All Lines</option>
+            <option value="cask"${staffLine==='cask'?' selected':''}>Cask Line</option>
+            <option value="bottle"${staffLine==='bottle'?' selected':''}>Bottle Line</option>
+            <option value="all"${staffLine==='all'?' selected':''}>All Lines Access</option>
+            <option value="none"${staffLine==='none'?' selected':''}>Non-Production</option>
+          </select>
+          <select onchange="staffFilter=this.value;renderStaff()" style="width:130px">
+            <option value="Employed"${staffFilter==='Employed'?' selected':''}>Employed</option>
+            <option value="On Leave"${staffFilter==='On Leave'?' selected':''}>On Leave</option>
+            <option value="Departed"${staffFilter==='Departed'?' selected':''}>Departed</option>
+            <option value="All"${staffFilter==='All'?' selected':''}>All</option>
+          </select>
+          <button class="btn btn-ghost btn-sm" onclick="staffSite='All';staffLine='All';staffFilter='Active';staffSearch='';renderStaff()">Clear</button>
+          <button class="btn btn-primary btn-sm" onclick="openStaffForm(null)">+ Add Staff</button>
+        </div>
+
+        <!-- Table header -->
+        <div style="display:grid;grid-template-columns:80px 1fr 130px 150px 130px 100px 80px;background:var(--navy)">
+          ${['Emp ID','Name','Role','Site','Line','Status',''].map(h=>`<div style="padding:9px 12px;font-family:var(--fd);font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:rgba(255,255,255,.6)">${h}</div>`).join('')}
+        </div>
+
+        ${filtered.length?filtered.map((s,ri)=>{
+          const site=state.sites.find(x=>x.id===s.site_id);
+          return`<div style="display:grid;grid-template-columns:80px 1fr 130px 150px 130px 100px 80px;border-bottom:1px solid rgba(48,54,61,.4);background:${ri%2===0?'transparent':'rgba(255,255,255,.02)'};${!s.is_active?'opacity:.5':''}">
+            <div style="padding:10px 12px;font-family:monospace;font-size:11px;color:var(--muted)">${esc(s.employee_id||'—')}</div>
+            <div style="padding:10px 12px">
+              <div style="font-weight:600;font-size:13px">${esc(s.name)}</div>
+              ${s.can_approve_wo?'<div style="font-size:10px;color:var(--accent)">★ Approver</div>':''}
+            </div>
+            <div style="padding:10px 12px">
+              <span class="badge" style="background:${roleColor[s.role]||'rgba(139,148,158,.15)'};color:${roleText[s.role]||'#8b949e'}">${esc(s.role||'—')}</span>
+            </div>
+            <div style="padding:10px 12px;font-size:12px;color:var(--muted)">${esc(site?.name||'—')}</div>
+            <div style="padding:10px 12px">
+              <span class="badge" style="background:rgba(255,255,255,.07);color:var(--muted)">${lineLabel[s.line_type]||s.line_type||'—'}</span>
+            </div>
+            <div style="padding:10px 12px">
+              ${(()=>{
+              const es=s.employment_status||( s.is_active?'Employed':'Departed');
+              if(es==='Employed')return'<span class="badge" style="background:rgba(34,197,94,.12);color:#22c55e">Employed</span>';
+              if(es==='On Leave')return'<span class="badge" style="background:rgba(249,115,22,.15);color:#f97316">On Leave</span>';
+              return'<span class="badge" style="background:rgba(139,148,158,.15);color:#8b949e">Departed</span>';
+            })()}
+            </div>
+            <div style="padding:8px 12px;display:flex;gap:6px;align-items:center">
+              <button class="btn btn-ghost btn-sm" onclick="openStaffForm('${s.id}')" title="Edit">✎</button>
+              <button class="btn btn-ghost btn-sm" onclick="toggleStaffActive('${s.id}',${!s.is_active})" title="${s.is_active?'Deactivate':'Activate'}" style="color:${s.is_active?'var(--orange)':'var(--green)'}">
+                ${s.is_active?'⊘':'✓'}
+              </button>
+            </div>
+          </div>`;
+        }).join(''):`<div class="empty">No staff match the current filter.</div>`}
+      </div>
+
+      <!-- Add/Edit form panel -->
+      <div id="staff-form-panel">
+        ${staffEditId!==null?renderStaffFormPanel():'<div class="card"><div class="empty" style="padding:20px">Select a staff member to edit, or click + Add Staff to add a new one.</div></div>'}
+      </div>
+    </div>
+  `;
+}
+
+function renderStaffFormPanel(){
+  const isNew=staffEditId==='new';
+  const f=staffForm;
+  const siteOpts=state.sites.map(s=>`<option value="${s.id}"${f.site_id===s.id?' selected':''}>${esc(s.name)}</option>`).join('');
+  return`<div class="card">
+    <div style="font-family:var(--fd);font-size:18px;font-weight:700;margin-bottom:16px;color:var(--accent)">${isNew?'Add New Staff Member':'Edit Staff Member'}</div>
+    <div class="form-grid">
+      <div class="fg"><label>Employee ID *</label><input value="${esc(f.employee_id)}" onchange="staffForm.employee_id=this.value" placeholder="e.g. 162"></div>
+      <div class="fg"><label>Full Name *</label><input value="${esc(f.name)}" onchange="staffForm.name=this.value" placeholder="First Last"></div>
+      <div class="fg full"><label>Role *</label>
+        <select onchange="staffForm.role=this.value">
+          ${['Operator','Maintenance Tech','Production Manager','Maintenance Manager','Supervisor'].map(r=>`<option${f.role===r?' selected':''}>${r}</option>`).join('')}
+        </select>
+      </div>
+      <div class="fg"><label>Site *</label>
+        <select onchange="staffForm.site_id=this.value">
+          <option value="">— Select site —</option>
+          ${siteOpts}
+        </select>
+      </div>
+      <div class="fg"><label>Line Access</label>
+        <select onchange="staffForm.line_type=this.value">
+          <option value="cask"${f.line_type==='cask'?' selected':''}>Cask Line</option>
+          <option value="bottle"${f.line_type==='bottle'?' selected':''}>Bottle Line</option>
+          <option value="all"${f.line_type==='all'?' selected':''}>All Lines</option>
+          <option value="none"${f.line_type==='none'?' selected':''}>Non-Production</option>
+        </select>
+      </div>
+      <div class="fg"><label>Can Approve WO?</label>
+        <select onchange="staffForm.can_approve_wo=this.value==='Yes'">
+          <option${!f.can_approve_wo?' selected':''}>No</option>
+          <option${f.can_approve_wo?' selected':''}>Yes</option>
+        </select>
+      </div>
+      <div class="fg"><label>Status</label>
+        <select onchange="staffForm.employment_status=this.value">
+          <option value="Employed"${(f.employment_status||'Employed')==='Employed'?' selected':''}>Employed</option>
+          <option value="On Leave"${f.employment_status==='On Leave'?' selected':''}>On Leave</option>
+          <option value="Departed"${f.employment_status==='Departed'?' selected':''}>Departed</option>
+        </select>
+      </div>
+    </div>
+    <div style="margin-top:16px;display:flex;gap:10px">
+      <button class="btn btn-primary" onclick="saveStaff()" id="save-staff-btn">
+        ${isNew?'Add Staff Member':'Save Changes'}
+      </button>
+      <button class="btn btn-ghost" onclick="staffEditId=null;renderStaff()">Cancel</button>
+    </div>
+  </div>`;
+}
+
+function openStaffForm(id){
+  if(id===null){
+    staffEditId='new';
+    staffForm={employee_id:'',name:'',role:'Operator',site_id:'',line_type:'all',is_active:true,can_approve_wo:false};
+  } else {
+    staffEditId=id;
+    const s=state.staff.find(x=>x.id===id);
+    if(s) staffForm={employee_id:s.employee_id||'',name:s.name,role:s.role||'Operator',site_id:s.site_id||'',line_type:s.line_type||'all',is_active:s.is_active!==false,employment_status:s.employment_status||'Employed',can_approve_wo:s.can_approve_wo||false};
+  }
+  renderStaff();
+}
+
+async function saveStaff(){
+  if(!staffForm.name||!staffForm.employee_id||!staffForm.site_id){
+    showToast('Employee ID, name and site are required.','error'); return;
+  }
+  const btn=$('save-staff-btn'); btn.disabled=true; btn.innerHTML='<div class="spinner"></div> Saving…';
+  const payload={
+    employee_id:staffForm.employee_id.trim(),
+    name:staffForm.name.trim(),
+    role:staffForm.role,
+    site_id:staffForm.site_id,
+    line_type:staffForm.line_type,
+    is_active:staffForm.employment_status==='Employed',
+    employment_status:staffForm.employment_status,
+    can_approve_wo:staffForm.can_approve_wo,
+  };
+  let error;
+  if(staffEditId==='new'){
+    const {data,error:err}=await sb.from('staff').insert(payload).select().single();
+    error=err;
+    if(!error&&data){ state.staff.push(data); showToast(`${data.name} added.`); }
+  } else {
+    ({error}=await sb.from('staff').update(payload).eq('id',staffEditId));
+    if(!error){
+      const idx=state.staff.findIndex(s=>s.id===staffEditId);
+      if(idx>-1) state.staff[idx]={...state.staff[idx],...payload};
+      showToast('Staff member updated.');
+    }
+  }
+  if(error){ showToast('Error: '+error.message,'error'); btn.disabled=false; btn.textContent='Save'; return; }
+  staffEditId=null;
+  renderNav();
+  renderStaff();
+}
+
+async function toggleStaffActive(id, newActive){
+  const {error}=await sb.from('staff').update({is_active:newActive}).eq('id',id);
+  if(error){ showToast('Error: '+error.message,'error'); return; }
+  const idx=state.staff.findIndex(s=>s.id===id);
+  if(idx>-1) state.staff[idx].is_active=newActive;
+  showToast(newActive?'Staff member activated.':'Staff member deactivated.');
+  renderStaff();
+}
+
 // ══════════════════════════════════════════════════════════
 // SETUP
 // ══════════════════════════════════════════════════════════
 function renderSetup(){
   $('content').innerHTML=`<div style="max-width:680px;display:flex;flex-direction:column;gap:16px">
+
     <div class="card"><div class="card-title">Database Status</div>
       ${[['Machines',state.machines.length],['PM Tasks',state.pmTasks.length],['Spare Parts',state.spareParts.length],['Work Orders',state.workOrders.length],['Staff',state.staff.length],['Statutory Requirements',state.statutory.length],['Sites',state.sites.length]].map(([k,v])=>`<div class="drow"><span class="dkey">${k}</span><span class="dval" style="color:${v>0?'var(--accent)':'var(--muted)'}">${v}</span></div>`).join('')}
     </div>
-    <div class="card"><div class="card-title">Import Staff</div>
-      <p style="font-size:13px;color:var(--muted);margin-bottom:16px;line-height:1.6">Creates Staff 1 through Staff 5 as placeholder records. Edit names directly in Supabase once the system is live.</p>
-      <button class="btn btn-primary" onclick="importStaff()" id="import-staff-btn" ${state.staff.length>=5?'disabled':''}>
-        ${state.staff.length>=5?'Staff already imported':'Import Staff Placeholders'}
-      </button>
+
+    <div class="card" style="border-color:rgba(14,124,206,.4)">
+      <div class="card-title" style="color:var(--pureau)">&#x2193; Export for Review</div>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:16px;line-height:1.6">
+        Download the current machine register or spare parts list as a CSV. Send to your maintenance team to review and correct before go-live. 
+        Re-import corrected files using the spare parts Excel import on the Spare Parts screen.
+      </p>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <button class="btn btn-ghost" onclick="exportMachines()" ${!state.machines.length?'disabled':''}>
+          &#x2193; Export Machines (${state.machines.length} records)
+        </button>
+        <button class="btn btn-ghost" onclick="exportSpareParts()" ${!state.spareParts.length?'disabled':''}>
+          &#x2193; Export Spare Parts (${state.spareParts.length} records)
+        </button>
+        <button class="btn btn-ghost" onclick="exportPMTasks()" ${!state.pmTasks.length?'disabled':''}>
+          &#x2193; Export Preventive Tasks (${state.pmTasks.length} records)
+        </button>
+      </div>
     </div>
-    <div class="card"><div class="card-title">Import Machines</div>
-      <p style="font-size:13px;color:var(--muted);margin-bottom:16px;line-height:1.6">Import all 22 machines. Duplicates are skipped automatically.</p>
-      <button class="btn btn-primary" onclick="importMachines()" id="import-machines-btn">Import All 22 Machines</button>
-    </div>
-    <div class="card"><div class="card-title">Import Preventive Tasks</div>
-      <p style="font-size:13px;color:var(--muted);margin-bottom:16px;line-height:1.6">Imports all preventive maintenance tasks. Machines must be imported first.</p>
-      <button class="btn btn-primary" onclick="importPMTasks()" id="import-pm-btn" ${!state.machines.length?'disabled':''}>Import Preventive Tasks</button>
-    </div>
-    <div class="card"><div class="card-title">Import Spare Parts</div>
-      <p style="font-size:13px;color:var(--muted);margin-bottom:16px;line-height:1.6">Imports all spare parts with stock levels. Machines must be imported first.</p>
-      <button class="btn btn-primary" onclick="importParts()" id="import-parts-btn" ${!state.machines.length?'disabled':''}>Import Spare Parts</button>
-    </div>
-    <div class="card" style="border-color:rgba(192,132,252,.4)"><div class="card-title" style="color:var(--purple)">Import Statutory &amp; Compliance</div>
-      <p style="font-size:13px;color:var(--muted);margin-bottom:16px;line-height:1.6">Imports all statutory and compliance obligations including pressure vessel inspections and electrical requirements.</p>
-      <button class="btn btn-primary" onclick="importStatutory()" id="import-stat-btn">Import Statutory &amp; Compliance</button>
-    </div>
+
+
     <div class="card" style="border-color:rgba(239,68,68,.3)"><div class="card-title" style="color:var(--red)">Danger Zone</div>
       <p style="font-size:13px;color:var(--muted);margin-bottom:16px">Clear all work orders from the database. Cannot be undone.</p>
-      <button class="btn btn-danger btn-sm" onclick="if(confirm('Delete ALL work orders? Cannot be undone.'))clearWorkOrders()">Clear All Work Orders</button>
+      <button class="btn btn-danger btn-sm" onclick="confirmClearWorkOrders()">Clear All Work Orders</button>
     </div>
   </div>`;
 }
 
-// ── STAFF SEED ────────────────────────────────────────────
-const STAFF_SEED=[
-  {name:'Staff 1',role:'Operator',is_active:true},
-  {name:'Staff 2',role:'Operator',is_active:true},
-  {name:'Staff 3',role:'Maintenance Tech',is_active:true},
-  {name:'Staff 4',role:'Maintenance Tech',is_active:true},
-  {name:'Staff 5',role:'Supervisor',is_active:true},
-];
+// ── EXPORT FUNCTIONS ───────────────────────────────────────
 
-async function importStaff(){
-  const btn=$('import-staff-btn');btn.disabled=true;btn.innerHTML='<div class="spinner"></div> Importing…';
-  let ok=0,skip=0;
-  for(const s of STAFF_SEED){
-    const {error}=await sb.from('staff').upsert(s,{onConflict:'name',ignoreDuplicates:true});
-    if(error)skip++;else ok++;
-  }
-  const fresh=await sb.from('staff').select('*').eq('is_active',true).order('name');
-  state.staff=fresh.data||[];
-  showToast(`Imported ${ok} staff. ${skip} skipped.`);
-  renderSetup();
+function csvEscape(val){
+  const s=String(val===null||val===undefined?'':val);
+  return s.includes(',')||s.includes('"')||s.includes('\n')?`"${s.replace(/"/g,'""')}"`:s;
 }
+
+function downloadCSV(filename, headers, rows){
+  const lines=[headers.map(csvEscape).join(','),...rows.map(r=>r.map(csvEscape).join(','))];
+  const blob=new Blob([lines.join('\n')],{type:'text/csv;charset=utf-8;'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url; a.download=filename;
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a); URL.revokeObjectURL(url);
+  showToast(`${filename} downloaded.`);
+}
+
+function exportMachines(){
+  const headers=['Machine Code','Name','Category','Site','Location Zone','Line Type','OEM Manufacturer','Country of Origin','Criticality','Status','Serial Number','Year Installed','Notes'];
+  const rows=state.machines.map(m=>{
+    const site=state.sites.find(s=>s.id===m.site_id);
+    return[m.machine_code,m.name,m.category||'',site?.name||'',m.location_zone||'',m.line_type||'',m.oem_manufacturer||'',m.country_of_origin||'',m.criticality||'',m.status||'',m.serial_number||'',m.year_installed||'',m.notes||''];
+  });
+  downloadCSV(`ABH_Machine_Register_${new Date().toISOString().slice(0,10)}.csv`, headers, rows);
+}
+
+function exportSpareParts(){
+  const headers=['Part Code','Part Name','Machine Code','Machine Name','Criticality','Min Qty','Max Qty','Current Qty','Bin Location','Is Consumable','NSF H1 Certified'];
+  const rows=state.spareParts.map(p=>{
+    const m=getMachine(p.machine_id);
+    return[p.part_code||'',p.name,m?.machine_code||'',m?.name||'',p.criticality||'',p.min_qty,p.max_qty||'',p.current_qty,p.bin_location||'',p.is_consumable?'Yes':'No',p.nsf_h1_certified?'Yes':'No'];
+  });
+  downloadCSV(`ABH_Spare_Parts_${new Date().toISOString().slice(0,10)}.csv`, headers, rows);
+}
+
+function exportPMTasks(){
+  const headers=['Task Code','Machine Code','Machine Name','Task Name','Frequency','Craft','Est. Duration (mins)','SOP Reference','Compliance Requirement','NSF H1 Lubricant'];
+  const rows=state.pmTasks.map(t=>{
+    const m=getMachine(t.machine_id);
+    return[t.task_code||'',m?.machine_code||'',m?.name||'',t.task_name,t.frequency||'',t.craft||'',t.estimated_duration_mins||'',t.sop_reference||'',t.compliance_requirement||'',t.nsf_h1_lubricant?'Yes':'No'];
+  });
+  downloadCSV(`ABH_PM_Tasks_${new Date().toISOString().slice(0,10)}.csv`, headers, rows);
+}
+
 
 // ── MACHINE SEED ──────────────────────────────────────────
 const MACHINE_SEED=[
@@ -1363,6 +2076,29 @@ async function importStatutory(){
   state.statutory=fresh.data||[];
   showToast(`Imported ${ok} statutory items. ${skip} skipped.`);
   btn.disabled=false;btn.textContent='Import Statutory & Compliance';renderSetup();
+}
+
+function confirmClearWorkOrders(){
+  const modal=document.createElement('div');
+  modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:300;display:flex;align-items:center;justify-content:center;padding:16px';
+  modal.innerHTML=`<div style="background:var(--surface);border:1px solid var(--red);border-radius:10px;padding:24px;max-width:400px;width:100%">
+    <div style="font-family:var(--fd);font-size:20px;font-weight:700;color:var(--red);margin-bottom:8px">&#9888; Danger Zone</div>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:16px;line-height:1.6">This will permanently delete ALL work orders and cannot be undone. Type the password to confirm.</p>
+    <input id="danger-pw" type="password" placeholder="Enter password…" style="width:100%;margin-bottom:12px" onkeydown="if(event.key==='Enter')document.getElementById('danger-confirm-btn').click()">
+    <div style="font-size:11px;color:var(--red);margin-bottom:16px" id="danger-err"></div>
+    <div style="display:flex;gap:10px;justify-content:flex-end">
+      <button class="btn btn-ghost" onclick="this.closest('[style*=fixed]').remove()">Cancel</button>
+      <button class="btn btn-danger" id="danger-confirm-btn" onclick="
+        const pw=document.getElementById('danger-pw').value;
+        const err=document.getElementById('danger-err');
+        if(pw!=='Pureau10L'){err.textContent='Incorrect password.';return;}
+        this.closest('[style*=fixed]').remove();
+        clearWorkOrders();
+      ">Confirm Delete</button>
+    </div>
+  </div>`;
+  document.body.appendChild(modal);
+  setTimeout(()=>document.getElementById('danger-pw')?.focus(),50);
 }
 
 async function clearWorkOrders(){
