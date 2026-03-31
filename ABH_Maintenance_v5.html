@@ -1,0 +1,1415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>ABH Maintenance System</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800&family=Barlow:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0d1117;--surface:#161b22;--surface2:#21262d;--border:#30363d;
+  --text:#e6edf3;--muted:#8b949e;--accent:#f0b429;--accent2:#0ea5e9;
+  --red:#ef4444;--orange:#f97316;--green:#22c55e;--purple:#c084fc;
+  --navy:#1B2A4A;--pureau:#0E7CCE;
+  /* Section colours */
+  --daily-bg:#0c1e3a;--daily-hdr:#0e4f8f;--daily-border:#1a6bbf;--daily-text:#60a5fa;
+  --weekly-bg:#1a0f2e;--weekly-hdr:#5b21b6;--weekly-border:#7c3aed;--weekly-text:#a78bfa;
+  --monthly-bg:#1f1400;--monthly-hdr:#92400e;--monthly-border:#d97706;--monthly-text:#fbbf24;
+  --fd:'Barlow Condensed',sans-serif;--fb:'Barlow',sans-serif;
+  --r:8px;--nav:224px;
+}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--fb);font-size:14px;overflow:hidden}
+#app{display:flex;height:100vh}
+.sidebar{width:var(--nav);background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;z-index:20;transition:transform .25s}
+.logo{padding:18px 20px 14px;border-bottom:1px solid var(--border)}
+.logo-img{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+.logo-badge{background:var(--pureau);color:#fff;font-family:var(--fd);font-size:13px;font-weight:800;letter-spacing:2px;padding:3px 8px;border-radius:4px}
+.logo-name{font-family:var(--fd);font-size:20px;font-weight:800;color:var(--text);letter-spacing:.5px}
+.logo-sub{font-size:10px;color:var(--muted);letter-spacing:2px;text-transform:uppercase}
+.nav-section-label{font-size:9px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted);padding:10px 20px 2px;opacity:.7;display:block}
+.nav-items{flex:1;overflow-y:auto}
+.nav-item{display:flex;align-items:center;gap:10px;padding:10px 20px;cursor:pointer;font-size:13px;font-weight:500;color:var(--muted);border-left:3px solid transparent;transition:all .15s}
+.nav-item:hover{color:var(--text);background:rgba(255,255,255,.04)}
+.nav-item.active{color:var(--accent);border-left-color:var(--accent);background:rgba(240,180,41,.08)}
+.nav-item svg{flex-shrink:0;width:15px;height:15px}
+.nav-badge{margin-left:auto;background:var(--red);color:#fff;border-radius:10px;font-size:10px;font-weight:700;padding:1px 6px;font-family:var(--fd)}
+.nav-footer{padding:12px 20px;border-top:1px solid var(--border);font-size:10px;color:var(--muted);line-height:1.7}
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
+.topbar{padding:12px 24px;border-bottom:1px solid var(--border);background:var(--surface);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;gap:12px}
+.topbar-left{display:flex;align-items:center;gap:12px}
+.menu-btn{display:none;background:none;border:none;color:var(--text);cursor:pointer;padding:4px}
+.topbar-title{font-family:var(--fd);font-size:22px;font-weight:700;letter-spacing:.5px}
+.topbar-date{font-size:11px;color:var(--muted)}
+.content{flex:1;overflow-y:auto;padding:20px 24px}
+@media(max-width:768px){
+  .sidebar{position:fixed;inset:0 auto 0 0;transform:translateX(-100%);z-index:100}
+  .sidebar.open{transform:translateX(0)}
+  .menu-btn{display:block}
+  .content{padding:14px}
+  .stat-grid{grid-template-columns:1fr 1fr!important}
+  .machine-grid{grid-template-columns:1fr!important}
+  .form-grid{grid-template-columns:1fr!important}
+  .overlay{display:block!important}
+}
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:99}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:18px}
+.card-title{font-family:var(--fd);font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:12px}
+.stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px}
+.stat{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:16px 18px}
+.stat.alert-card{border-color:var(--red);background:rgba(239,68,68,.06)}
+.stat.warn-card{border-color:var(--orange);background:rgba(249,115,22,.06)}
+.stat.ok-card{border-color:var(--green);background:rgba(34,197,94,.06)}
+.stat-num{font-family:var(--fd);font-size:40px;font-weight:800;line-height:1}
+.stat-label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-top:4px}
+.tbl{width:100%;border-collapse:collapse;font-size:13px}
+.tbl th{padding:9px 12px;text-align:left;font-family:var(--fd);font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--border);white-space:nowrap}
+.tbl td{padding:8px 12px;border-bottom:1px solid rgba(48,54,61,.5);vertical-align:middle}
+.tbl tr:last-child td{border-bottom:none}
+.tbl tr.row-click:hover td{background:rgba(255,255,255,.03);cursor:pointer}
+.tbl-wrap{overflow-x:auto}
+.badge{display:inline-block;padding:2px 7px;border-radius:3px;font-size:10px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;font-family:var(--fd);white-space:nowrap}
+.machine-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.mcard{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:14px;cursor:pointer;transition:all .15s;border-left:4px solid transparent}
+.mcard:hover{background:var(--surface2);border-color:var(--accent2)}
+.mcard.sel{border-left-color:var(--accent)!important;background:rgba(240,180,41,.05)}
+.mcard-name{font-family:var(--fd);font-size:15px;font-weight:700;margin-bottom:4px;line-height:1.2}
+.mcard-meta{font-size:11px;color:var(--muted);display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.fg{display:flex;flex-direction:column;gap:5px}
+.fg.full{grid-column:1/-1}
+label{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:var(--muted)}
+input,select,textarea{background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:9px 11px;font-size:13px;font-family:var(--fb);outline:none;transition:border-color .15s;width:100%}
+input:focus,select:focus,textarea:focus{border-color:var(--accent)}
+textarea{resize:vertical;min-height:72px}
+select option{background:var(--surface2)}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:9px 16px;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;border:none;transition:all .15s;font-family:var(--fb)}
+.btn-primary{background:var(--accent);color:#000}
+.btn-primary:hover{background:#fbbf24}
+.btn-primary:disabled{opacity:.45;cursor:not-allowed}
+.btn-danger{background:var(--red);color:#fff}
+.btn-danger:hover{background:#dc2626}
+.btn-danger:disabled{opacity:.45;cursor:not-allowed}
+.btn-ghost{background:transparent;color:var(--text);border:1px solid var(--border)}
+.btn-ghost:hover{background:var(--surface2)}
+.btn-sm{padding:6px 11px;font-size:12px}
+.filter-row{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;align-items:center}
+.filter-row input{flex:1;min-width:160px}
+.filter-row select{width:160px}
+.tabs{display:flex;border-bottom:1px solid var(--border);margin-bottom:16px;gap:2px;overflow-x:auto}
+.tab{padding:9px 18px;font-size:13px;font-weight:600;cursor:pointer;color:var(--muted);border-bottom:2px solid transparent;transition:all .15s;font-family:var(--fd);white-space:nowrap}
+.tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+.tab:hover:not(.active){color:var(--text)}
+.drow{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px;gap:12px}
+.drow:last-child{border-bottom:none}
+.dkey{color:var(--muted);font-weight:500;flex-shrink:0}
+.dval{font-weight:500;text-align:right;word-break:break-word}
+#toast{position:fixed;bottom:24px;right:24px;padding:12px 20px;border-radius:8px;font-weight:600;font-size:13px;z-index:300;display:none;animation:slideUp .3s ease}
+#toast.success{background:var(--green);color:#000}
+#toast.error{background:var(--red);color:#fff}
+@keyframes slideUp{from{transform:translateY(16px);opacity:0}to{transform:translateY(0);opacity:1}}
+.spinner{display:inline-block;width:18px;height:18px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading{display:flex;align-items:center;justify-content:center;padding:48px;gap:12px;color:var(--muted)}
+.alert-strip{background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3);border-radius:var(--r);padding:10px 16px;margin-bottom:16px;display:flex;align-items:center;gap:10px;font-size:13px;font-weight:500;color:var(--red)}
+.empty{text-align:center;padding:40px 20px;color:var(--muted);font-size:13px}
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:900px){.two-col{grid-template-columns:1fr}}
+.conn-status{display:flex;align-items:center;gap:6px;font-size:11px}
+.conn-dot{width:7px;height:7px;border-radius:50%;background:var(--green)}
+.conn-dot.err{background:var(--red)}
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:200;display:flex;align-items:center;justify-content:center;padding:16px}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:10px;width:100%;max-width:520px;max-height:90vh;overflow-y:auto;padding:24px}
+.modal-hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px}
+.modal-title{font-family:var(--fd);font-size:22px;font-weight:700}
+.modal-footer{display:flex;gap:10px;justify-content:flex-end;margin-top:20px;padding-top:16px;border-top:1px solid var(--border)}
+
+/* ══ PM SECTION COLLAPSIBLES ══════════════════════════════ */
+.pm-section{border-radius:var(--r);margin-bottom:14px;overflow:hidden;border:1px solid}
+.pm-section.daily{border-color:var(--daily-border);background:var(--daily-bg)}
+.pm-section.weekly{border-color:var(--weekly-border);background:var(--weekly-bg)}
+.pm-section.monthly{border-color:var(--monthly-border);background:var(--monthly-bg)}
+
+.pm-section-hdr{display:flex;align-items:center;justify-content:space-between;padding:13px 18px;cursor:pointer;user-select:none}
+.pm-section.daily .pm-section-hdr{background:var(--daily-hdr)}
+.pm-section.weekly .pm-section-hdr{background:var(--weekly-hdr)}
+.pm-section.monthly .pm-section-hdr{background:var(--monthly-hdr)}
+
+.pm-section-left{display:flex;align-items:center;gap:12px}
+.pm-section-title{font-family:var(--fd);font-size:16px;font-weight:800;letter-spacing:.5px;color:#fff}
+.pm-section-count{font-family:var(--fd);font-size:11px;font-weight:700;padding:2px 9px;border-radius:10px;color:#fff}
+.pm-section.daily .pm-section-count{background:rgba(96,165,250,.3)}
+.pm-section.weekly .pm-section-count{background:rgba(167,139,250,.3)}
+.pm-section.monthly .pm-section-count{background:rgba(251,191,36,.3)}
+
+.pm-section-right{display:flex;align-items:center;gap:10px}
+.pm-override{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:600;color:rgba(255,255,255,.7);cursor:pointer;padding:4px 10px;border-radius:4px;border:1px solid rgba(255,255,255,.2);transition:all .15s}
+.pm-override:hover{background:rgba(255,255,255,.1)}
+.pm-override input{width:14px;height:14px;cursor:pointer;accent-color:#fff;margin:0}
+.pm-section-arrow{color:#fff;transition:transform .2s;flex-shrink:0}
+.pm-section-arrow.open{transform:rotate(180deg)}
+
+.pm-section-body{display:none;padding:0}
+.pm-section-body.open{display:block}
+
+.pm-locked{padding:14px 18px;font-size:13px;display:flex;align-items:center;gap:10px}
+.pm-section.daily .pm-locked{color:var(--daily-text)}
+.pm-section.weekly .pm-locked{color:var(--weekly-text)}
+.pm-section.monthly .pm-locked{color:var(--monthly-text)}
+
+/* ══ PM MACHINE GROUPS ════════════════════════════════════ */
+.pm-machine-group{border-top:1px solid}
+.pm-machine-group:first-child{border-top:none}
+.pm-section.daily .pm-machine-group{border-color:rgba(96,165,250,.15)}
+.pm-section.weekly .pm-machine-group{border-color:rgba(167,139,250,.15)}
+.pm-section.monthly .pm-machine-group{border-color:rgba(251,191,36,.15)}
+
+.pm-machine-label{padding:8px 18px;font-family:var(--fd);font-size:12px;font-weight:700;letter-spacing:1px;text-transform:uppercase;border-bottom:1px solid}
+.pm-section.daily .pm-machine-label{color:var(--daily-text);background:rgba(14,79,143,.4);border-color:rgba(96,165,250,.15)}
+.pm-section.weekly .pm-machine-label{color:var(--weekly-text);background:rgba(91,33,182,.4);border-color:rgba(167,139,250,.15)}
+.pm-section.monthly .pm-machine-label{color:var(--monthly-text);background:rgba(146,64,14,.4);border-color:rgba(251,191,36,.15)}
+
+/* ══ TASK ROWS ════════════════════════════════════════════ */
+.pm-task-row{display:grid;grid-template-columns:36px 1fr 120px 100px 90px 160px 140px;gap:0;align-items:center;border-bottom:1px solid;transition:background .1s}
+.pm-section.daily .pm-task-row{border-color:rgba(96,165,250,.08)}
+.pm-section.weekly .pm-task-row{border-color:rgba(167,139,250,.08)}
+.pm-section.monthly .pm-task-row{border-color:rgba(251,191,36,.08)}
+.pm-task-row:last-child{border-bottom:none}
+.pm-task-row.done{opacity:.6}
+.pm-task-row.done .pm-task-name{text-decoration:line-through;color:var(--muted)}
+.pm-task-row:hover{background:rgba(255,255,255,.03)}
+
+.pm-task-hdr{display:grid;grid-template-columns:36px 1fr 120px 100px 90px 160px 140px;gap:0;padding:6px 0;border-bottom:1px solid;margin-bottom:0}
+.pm-section.daily .pm-task-hdr{border-color:rgba(96,165,250,.25)}
+.pm-section.weekly .pm-task-hdr{border-color:rgba(167,139,250,.25)}
+.pm-section.monthly .pm-task-hdr{border-color:rgba(251,191,36,.25)}
+
+.pm-th{padding:6px 12px;font-family:var(--fd);font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted)}
+.pm-th:first-child{padding-left:10px}
+
+.pm-td{padding:9px 12px;font-size:13px;vertical-align:middle}
+.pm-td:first-child{padding-left:10px;text-align:center}
+
+.pm-task-name{font-weight:500}
+.pm-task-sop{font-size:10px;color:var(--accent2);font-family:monospace}
+.pm-task-craft{font-size:12px;color:var(--muted)}
+.pm-task-time{font-size:12px;color:var(--muted)}
+
+/* Completion checkbox */
+.pm-check{width:18px;height:18px;cursor:pointer;border-radius:4px;accent-color:var(--green);flex-shrink:0}
+.pm-section.daily .pm-check{accent-color:#60a5fa}
+.pm-section.weekly .pm-check{accent-color:#a78bfa}
+.pm-section.monthly .pm-check{accent-color:#fbbf24}
+
+/* Staff dropdown in task row */
+.pm-staff-sel{background:transparent;border:1px solid var(--border);border-radius:4px;color:var(--text);padding:4px 6px;font-size:11px;font-family:var(--fb);outline:none;width:100%;cursor:pointer}
+.pm-staff-sel:focus{border-color:var(--accent)}
+
+/* Completion stamp */
+.pm-stamp{font-size:10px;font-weight:600;color:var(--green);white-space:nowrap}
+
+/* Progress bar */
+.pm-progress-wrap{height:4px;background:rgba(255,255,255,.08);border-radius:2px;margin-top:6px;overflow:hidden}
+.pm-progress-bar{height:100%;border-radius:2px;transition:width .3s}
+.pm-section.daily .pm-progress-bar{background:var(--daily-text)}
+.pm-section.weekly .pm-progress-bar{background:var(--weekly-text)}
+.pm-section.monthly .pm-progress-bar{background:var(--monthly-text)}
+
+/* Completion summary chip */
+.pm-complete-chip{font-family:var(--fd);font-size:11px;font-weight:700;padding:2px 9px;border-radius:10px;color:#fff}
+.pm-section.daily .pm-complete-chip{background:rgba(96,165,250,.3)}
+.pm-section.weekly .pm-complete-chip{background:rgba(167,139,250,.3)}
+.pm-section.monthly .pm-complete-chip{background:rgba(251,191,36,.3)}
+
+/* ══ PM TOP BAR ═══════════════════════════════════════════ */
+.pm-topbar{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:16px}
+.pm-meta{font-size:13px;color:var(--muted)}
+.pm-meta strong{color:var(--text)}
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="sidebar" id="sidebar">
+    <div class="logo">
+      <div class="logo-img">
+        <div class="logo-badge">ABH</div>
+        <div class="logo-name">PUREAU</div>
+      </div>
+      <div class="logo-sub">Maintenance System</div>
+    </div>
+    <div class="nav-items" id="nav-items"></div>
+    <div class="nav-footer">
+      <div class="conn-status"><div class="conn-dot" id="conn-dot"></div><span id="conn-label">Connecting…</span></div>
+      <div style="margin-top:4px">Australian Beverage Holdings · v3.0</div>
+    </div>
+  </div>
+  <div class="overlay" id="overlay" onclick="closeSidebar()"></div>
+  <div class="main">
+    <div class="topbar">
+      <div class="topbar-left">
+        <button class="menu-btn" onclick="toggleSidebar()">
+          <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+        </button>
+        <div>
+          <div class="topbar-title" id="page-title">Dashboard</div>
+          <div class="topbar-date" id="page-date"></div>
+        </div>
+      </div>
+      <div id="topbar-right"></div>
+    </div>
+    <div class="content" id="content"><div class="loading"><div class="spinner"></div> Connecting to database…</div></div>
+  </div>
+</div>
+<div id="machine-modal" style="display:none"></div>
+<div id="toast"></div>
+
+<script>
+const SUPABASE_URL = 'https://gdfbpvzatnqmzujagtqm.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdkZmJwdnphdG5xbXp1amFndHFtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ2MzE3NTQsImV4cCI6MjA5MDIwNzc1NH0.O0XquoCFEaIL0xJZKGaPrFgfz42A_j1uKRUjhr6Zqvw';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+let state = {
+  view:'dashboard', machines:[], pmTasks:[], spareParts:[], workOrders:[],
+  sites:[], suppliers:[], alerts:[], statutory:[], staff:[],
+  loaded:false, openBreakdowns:0, stockAlerts:0,
+};
+
+// PM completions: { taskId: { staffName, time, dbId } } — loaded from Supabase on load
+let pmCompletions = {};
+// Per-section overrides: { daily: bool, weekly: bool, monthly: bool }
+let pmOverrides = { daily:false, weekly:false, monthly:false };
+// Section open/closed state
+let pmOpen = { daily:true, weekly:true, monthly:true };
+// PM filters
+let pmSite='All', pmLine='All';
+
+const NAV = [
+  { section:'Overview' },
+  { id:'dashboard',   label:'Dashboard',             icon:'M3 3h8v8H3zm10 0h8v8h-8zM3 13h8v8H3zm10 4h2v-2h2v2h2v2h-2v2h-2v-2h-2z' },
+  { section:'Maintenance' },
+  { id:'pm-schedule', label:'Preventive Maintenance', icon:'M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM7 10h2v2H7zm4 0h2v2h-2zm4 0h2v2h-2z' },
+  { id:'log-pm',      label:'Log Preventive Task',            icon:'M9 11l3 3L22 4M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11' },
+  { id:'breakdown',   label:'Raise Breakdown',        icon:'M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0zM12 9v4m0 4h.01', badge:'openBreakdowns' },
+  { id:'workorders',  label:'Work Order Log',         icon:'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm4 18H6V4h7v5h5v11z' },
+  { section:'Assets & Stock' },
+  { id:'machines',    label:'Machine Register',       icon:'M12 2a10 10 0 1 0 0 20A10 10 0 0 0 12 2zm0 2a8 8 0 1 1 0 16A8 8 0 0 1 12 4zm-1 3v5l4 2.5-.75 1.3L10 15V7h1z' },
+  { id:'stock',       label:'Spare Parts',            icon:'M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z', badge:'stockAlerts' },
+  { id:'compliance',  label:'Compliance',             icon:'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z' },
+  { section:'Reporting' },
+  { id:'audit',       label:'Completion Audit',        icon:'M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 0 2-2h2a2 2 0 0 0 2 2m-6 9l2 2 4-4' },
+  { section:'Admin' },
+  { id:'setup',       label:'Setup / Import',         icon:'M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z' },
+];
+
+const $ = id => document.getElementById(id);
+const crit = c => ({Critical:'#ef4444',High:'#f97316',Medium:'#eab308',Low:'#22c55e'}[c]||'#8b949e');
+const badge = (t,bg,col) => `<span class="badge" style="background:${bg};color:${col}">${t}</span>`;
+const critBadge = c => badge(c,crit(c)+'22',crit(c));
+const statusBadge = s => { const m={Active:['rgba(34,197,94,.12)','#22c55e'],'Under Repair':['rgba(249,115,22,.12)','#f97316'],'Awaiting Parts':['rgba(239,68,68,.12)','#ef4444'],Inactive:['rgba(139,148,158,.15)','#8b949e'],Decommissioned:['rgba(139,148,158,.15)','#8b949e']}; const [bg,col]=m[s]||['rgba(139,148,158,.15)','#8b949e']; return badge(s,bg,col); };
+const woBadge = t => badge(t,t==='Breakdown'?'rgba(239,68,68,.15)':'rgba(34,197,94,.12)',t==='Breakdown'?'#ef4444':'#22c55e');
+const woStatusBadge = s => { const m={Open:['rgba(239,68,68,.15)','#ef4444'],'In Progress':['rgba(249,115,22,.15)','#f97316'],'Awaiting Parts':['rgba(234,179,8,.15)','#eab308'],'Awaiting OEM':['rgba(168,85,247,.15)','#a855f7'],Closed:['rgba(139,148,158,.15)','#8b949e'],Cancelled:['rgba(139,148,158,.15)','#8b949e']}; const [bg,col]=m[s]||['rgba(139,148,158,.15)','#8b949e']; return badge(s,bg,col); };
+const stockBadge = p => { if(p.current_qty<=0)return badge('OUT','rgba(239,68,68,.15)','#ef4444'); if(p.current_qty<=p.min_qty)return badge('LOW','rgba(249,115,22,.15)','#f97316'); return badge('OK','rgba(34,197,94,.1)','#22c55e'); };
+const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const fmtDate = d => d?new Date(d).toLocaleDateString('en-AU'):'—';
+const fmtTime = d => d?new Date(d).toLocaleTimeString('en-AU',{hour:'2-digit',minute:'2-digit'}):'';
+const getMachine = id => state.machines.find(m=>m.id===id);
+
+// Staff eligibility filter — global so Log PM, Breakdown and PM screen all use it
+function getEligibleStaff(machineId){
+  const m=getMachine(machineId);
+  if(!m||!state.staff.length) return state.staff;
+  return state.staff.filter(function(s){
+    // Maintenance Manager (Ravindra) always eligible across all sites
+    if(s.can_approve_wo && s.role==='Maintenance Manager') return true;
+    // Site must match if both are set
+    if(s.site_id && m.site_id && s.site_id!==m.site_id) return false;
+    // line_type 'all' = any machine at their site
+    if(s.line_type==='all') return true;
+    // Shared machines (date coders, compressor) — anyone at the site can be assigned
+    if(!m.line_type || m.line_type==='shared') return true;
+    // Otherwise line_type must match
+    return s.line_type===m.line_type;
+  });
+}
+const todayStr = () => new Date().toISOString().slice(0,10);
+
+function showToast(msg,type='success'){ const t=$('toast');t.textContent=msg;t.className=type;t.style.display='block';clearTimeout(t._t);t._t=setTimeout(()=>{t.style.display='none'},3500); }
+function toggleSidebar(){ $('sidebar').classList.toggle('open');$('overlay').style.display=$('sidebar').classList.contains('open')?'block':'none'; }
+function closeSidebar(){ $('sidebar').classList.remove('open');$('overlay').style.display='none'; }
+
+async function loadAll(){
+  try {
+    const [machines,pmTasks,parts,wos,sites,suppliers,alerts,statutory,staff] = await Promise.all([
+      sb.from('machines').select('*').order('machine_code'),
+      sb.from('pm_tasks').select('*').order('task_code'),
+      sb.from('spare_parts').select('*').order('part_code'),
+      sb.from('work_orders').select('*').order('date_raised',{ascending:false}),
+      sb.from('sites').select('*'),
+      sb.from('suppliers').select('*').order('name'),
+      sb.from('alerts').select('*').eq('status','Active').order('created_at',{ascending:false}),
+      sb.from('statutory_requirements').select('*').eq('is_active',true).order('next_due_date'),
+      sb.from('staff').select('*').eq('is_active',true).order('name'),
+    ]);
+    state.machines=machines.data||[];
+    state.pmTasks=pmTasks.data||[];
+    state.spareParts=parts.data||[];
+    state.workOrders=wos.data||[];
+    state.sites=sites.data||[];
+    state.suppliers=suppliers.data||[];
+    state.alerts=alerts.data||[];
+    state.statutory=statutory.data||[];
+    state.staff=staff.data||[];
+    state.openBreakdowns=state.workOrders.filter(w=>w.wo_type==='Breakdown'&&w.status==='Open').length;
+    state.stockAlerts=state.spareParts.filter(p=>p.current_qty<=p.min_qty).length;
+    // Load today's completions
+    const todayStart=new Date();todayStart.setHours(0,0,0,0);
+    const {data:todayComps}=await sb.from('pm_completions')
+      .select('*').gte('completed_at',todayStart.toISOString());
+    pmCompletions={};
+    (todayComps||[]).forEach(c=>{
+      pmCompletions[c.pm_task_id]={staffName:c.completed_by,time:new Date(c.completed_at),dbId:c.id};
+    });
+    state.loaded=true;
+    $('conn-dot').classList.remove('err');
+    $('conn-label').textContent='Connected';
+    renderNav(); render();
+  } catch(e){
+    $('conn-dot').classList.add('err');
+    $('conn-label').textContent='Connection error';
+    $('content').innerHTML=`<div class="empty">&#10060; Could not connect.<br><small style="color:var(--muted)">${esc(e.message)}</small></div>`;
+  }
+}
+
+function renderNav(){
+  $('nav-items').innerHTML=NAV.map(n=>{
+    if(n.section)return`<span class="nav-section-label">${n.section}</span>`;
+    const cnt=n.badge?state[n.badge]:0;
+    return`<div class="nav-item${state.view===n.id?' active':''}" onclick="navigate('${n.id}')">
+      <svg fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="${n.icon}"/></svg>
+      <span style="flex:1">${n.label}</span>
+      ${cnt>0?`<span class="nav-badge">${cnt}</span>`:''}
+    </div>`;
+  }).join('');
+}
+
+const PAGE_TITLES={dashboard:'Dashboard',machines:'Machine Register','pm-schedule':'Preventive Maintenance','log-pm':'Log Preventive Task',breakdown:'Raise Breakdown',stock:'Spare Parts',workorders:'Work Order Log',compliance:'Compliance Register',audit:'Completion Audit',setup:'Setup & Data Import'};
+
+function navigate(view){ state.view=view; $('page-title').textContent=PAGE_TITLES[view]||view; renderNav(); closeSidebar(); render(); }
+
+function render(){
+  if(!state.loaded){$('content').innerHTML='<div class="loading"><div class="spinner"></div> Loading…</div>';return;}
+  ({dashboard:renderDashboard,machines:renderMachines,'pm-schedule':renderPMSchedule,'log-pm':renderLogPM,breakdown:renderBreakdown,stock:renderStock,workorders:renderWorkOrders,compliance:renderCompliance,audit:renderAudit,setup:renderSetup}[state.view]||renderDashboard)();
+}
+
+function initDate(){ $('page-date').textContent=new Date().toLocaleDateString('en-AU',{weekday:'long',year:'numeric',month:'long',day:'numeric'}); }
+
+// ══════════════════════════════════════════════════════════
+// DASHBOARD
+// ══════════════════════════════════════════════════════════
+function renderDashboard(){
+  const openBD=state.workOrders.filter(w=>w.wo_type==='Breakdown'&&w.status==='Open');
+  const totalDT=state.workOrders.reduce((s,w)=>s+(parseFloat(w.downtime_hours)||0),0);
+  const stockAlert=state.spareParts.filter(p=>p.current_qty<=p.min_qty);
+  const recent=state.workOrders.slice(0,8);
+  let html='';
+  if(openBD.length)html+=`<div class="alert-strip">&#9888; ${openBD.length} open breakdown work order${openBD.length>1?'s':''} require attention</div>`;
+  html+=`<div class="stat-grid">
+    <div class="stat ${openBD.length?'alert-card':'ok-card'}"><div class="stat-num" style="color:${openBD.length?'var(--red)':'var(--green)'}">${openBD.length}</div><div class="stat-label">Open Breakdowns</div></div>
+    <div class="stat ${totalDT>8?'warn-card':'ok-card'}"><div class="stat-num" style="color:${totalDT>8?'var(--orange)':'var(--green)'}">${totalDT.toFixed(1)}</div><div class="stat-label">Total Downtime (hrs)</div></div>
+    <div class="stat ${stockAlert.length?'warn-card':'ok-card'}"><div class="stat-num" style="color:${stockAlert.length?'var(--orange)':'var(--green)'}">${stockAlert.length}</div><div class="stat-label">Stock Alerts</div></div>
+    <div class="stat"><div class="stat-num" style="color:var(--accent)">${state.machines.length}</div><div class="stat-label">Machines Registered</div></div>
+  </div>
+  <div class="two-col">
+    <div class="card">
+      <div class="card-title">Recent Work Orders</div>
+      <div class="tbl-wrap"><table class="tbl"><thead><tr><th>WO</th><th>Date</th><th>Machine</th><th>Type</th><th>Status</th></tr></thead><tbody>
+      ${recent.length?recent.map(w=>{const m=getMachine(w.machine_id);return`<tr class="row-click" onclick="navigate('workorders')"><td style="font-family:monospace;font-size:11px;color:var(--accent)">${esc(w.wo_number)}</td><td style="color:var(--muted);font-size:12px;white-space:nowrap">${fmtDate(w.date_raised)}</td><td style="font-size:12px">${esc(m?.name||'')}</td><td>${woBadge(w.wo_type)}</td><td>${woStatusBadge(w.status)}</td></tr>`;}).join(''):'<tr><td colspan="5" class="empty">No work orders yet.</td></tr>'}
+      </tbody></table></div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:16px">
+      <div class="card">
+        <div class="card-title">Stock Alerts</div>
+        ${stockAlert.length?stockAlert.slice(0,6).map(p=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px"><span>${esc(p.name)}</span>${stockBadge(p)}</div>`).join(''):'<div class="empty" style="padding:16px 0">All stock levels OK.</div>'}
+      </div>
+      <div class="card">
+        <div class="card-title">Open Breakdowns</div>
+        ${openBD.length?openBD.slice(0,5).map(w=>{const m=getMachine(w.machine_id);return`<div style="padding:8px 0;border-bottom:1px solid var(--border);font-size:13px"><div style="display:flex;justify-content:space-between;margin-bottom:2px"><span style="font-family:monospace;font-size:11px;color:var(--accent)">${esc(w.wo_number)}</span><span style="color:var(--muted);font-size:11px">${fmtDate(w.date_raised)}</span></div><div style="font-weight:600">${esc(m?.name||'')}</div><div style="color:var(--muted);font-size:12px;margin-top:2px">${esc(w.title)}</div></div>`;}).join(''):'<div class="empty" style="padding:16px 0">No open breakdowns.</div>'}
+      </div>
+    </div>
+  </div>`;
+  $('content').innerHTML=html;
+}
+
+// ══════════════════════════════════════════════════════════
+// PREVENTIVE MAINTENANCE — DATE-AWARE WITH COMPLETIONS
+// ══════════════════════════════════════════════════════════
+function renderPMSchedule(){
+  const now=new Date();
+  const dow=now.getDay(); // 0=Sun,1=Mon
+  const dom=now.getDate();
+  const isMonday=dow===1;
+  const isFirstOfMonth=dom===1;
+
+  // Site / Line filter options
+  const siteOpts=['All',...new Set(state.machines.filter(m=>m.site_id).map(m=>m.site_id))].map(sid=>{
+    if(sid==='All')return{id:'All',label:'All Sites'};
+    const s=state.sites.find(x=>x.id===sid);
+    return{id:sid,label:s?.name||sid};
+  });
+  const sfMachines=pmSite==='All'?state.machines:state.machines.filter(m=>m.site_id===pmSite);
+  const lineOpts=['All',...new Set(sfMachines.filter(m=>m.location_zone).map(m=>m.location_zone))];
+
+  const filteredMachines=state.machines.filter(m=>{
+    const sm=pmSite==='All'||m.site_id===pmSite;
+    const lm=pmLine==='All'||m.location_zone===pmLine;
+    return sm&&lm;
+  });
+  const fmIds=new Set(filteredMachines.map(m=>m.id));
+  const visible=state.pmTasks.filter(t=>fmIds.has(t.machine_id));
+
+  const daily=visible.filter(t=>t.frequency==='Daily');
+  const weekly=visible.filter(t=>t.frequency==='Weekly');
+  const monthly=visible.filter(t=>!['Daily','Weekly'].includes(t.frequency));
+
+  function staffOpts(machineId, selectedName){
+    const eligible=getEligibleStaff(machineId);
+    if(!eligible.length) return '<option value="">— No staff for this line —</option>';
+    return`<option value="">— Select —</option>`+eligible.map(s=>`<option value="${esc(s.name)}"${selectedName===s.name?' selected':''}>${esc(s.name)}${s.role==='Maintenance Manager'?' ★':''}</option>`).join('');
+  }
+
+  function completionStats(tasks){
+    const done=tasks.filter(t=>pmCompletions[t.id]).length;
+    return{done,total:tasks.length,pct:tasks.length?Math.round(done/tasks.length*100):0};
+  }
+
+  function buildSection(tasks, type, label, icon, isToday){
+    if(!tasks.length)return'';
+    const stats=completionStats(tasks);
+    const isOpen=pmOpen[type];
+    const isOverridden=pmOverrides[type];
+    const showContent=isToday||isOverridden;
+
+    // Group by machine
+    const byMachine={};
+    tasks.forEach(t=>{if(!byMachine[t.machine_id])byMachine[t.machine_id]=[];byMachine[t.machine_id].push(t);});
+
+    const lockMsg={
+      weekly:`Weekly tasks are scheduled for Mondays. ${isOverridden?'':'Use the override to view today.'}`,
+      monthly:`Monthly tasks are scheduled for the 1st of the month. ${isOverridden?'':'Use the override to view today.'}`,
+    }[type]||'';
+
+    const overrideLabel=type==='daily'?'':'Show today';
+
+    const machineRows=Object.entries(byMachine).map(([mid,tasks])=>{
+      const m=getMachine(mid);if(!m)return'';
+      const site=state.sites.find(s=>s.id===m.site_id);
+      return`<div class="pm-machine-group">
+        <div class="pm-machine-label">${esc(m.machine_code)} &mdash; ${esc(m.name)}<span style="font-weight:400;margin-left:8px;opacity:.7">${esc(site?.name||'')}${m.location_zone?' &middot; '+m.location_zone:''}</span></div>
+        <div class="pm-task-hdr">
+          <div class="pm-th"></div>
+          <div class="pm-th">Task</div>
+          <div class="pm-th">SOP Ref</div>
+          <div class="pm-th">Craft</div>
+          <div class="pm-th">Est.</div>
+          <div class="pm-th">Assigned To</div>
+          <div class="pm-th">Completed</div>
+        </div>
+        ${tasks.map(t=>{
+          const c=pmCompletions[t.id];
+          return`<div class="pm-task-row${c?' done':''}" id="row-${t.id}">
+            <div class="pm-td"><input type="checkbox" class="pm-check" ${c?'checked':''} onchange="togglePMComplete('${t.id}','${type}',this)" title="Mark complete"></div>
+            <div class="pm-td">
+              <div class="pm-task-name">${esc(t.task_name)}</div>
+              ${t.compliance_requirement?`<div style="margin-top:2px"><span class="badge" style="background:rgba(14,124,206,.15);color:#0E7CCE;font-size:9px">${esc(t.compliance_requirement)}</span></div>`:''}
+              ${t.nsf_h1_lubricant?`<div style="margin-top:2px"><span class="badge" style="background:rgba(34,197,94,.1);color:#22c55e;font-size:9px">NSF H1</span></div>`:''}
+            </div>
+            <div class="pm-td"><code class="pm-task-sop">${esc(t.sop_reference||'—')}</code></div>
+            <div class="pm-td pm-task-craft">${esc(t.craft||'—')}</div>
+            <div class="pm-td pm-task-time">${t.estimated_duration_mins?t.estimated_duration_mins+' min':'—'}</div>
+            <div class="pm-td">
+              <select class="pm-staff-sel" id="staff-${t.id}" onchange="setPMStaff('${t.id}',this.value)" ${c?'disabled':''}>
+                ${staffOpts(mid, c?.staffName||'')}
+              </select>
+            </div>
+            <div class="pm-td" id="stamp-${t.id}">
+              ${c?`<div class="pm-stamp">&#10003; ${esc(c.staffName)}<br><span style="font-weight:400;opacity:.7">${fmtTime(c.time)}</span></div>`:''}
+            </div>
+          </div>`;
+        }).join('')}
+      </div>`;
+    }).join('');
+
+    return`<div class="pm-section ${type}" id="pm-sec-${type}">
+      <div class="pm-section-hdr" onclick="togglePMSection('${type}')">
+        <div class="pm-section-left">
+          ${icon}
+          <span class="pm-section-title">${label}</span>
+          <span class="pm-section-count">${tasks.length} task${tasks.length!==1?'s':''}</span>
+          ${stats.done>0?`<span class="pm-complete-chip">${stats.done}/${stats.total} done</span>`:''}
+        </div>
+        <div class="pm-section-right" onclick="event.stopPropagation()">
+          ${type!=='daily'?`<label class="pm-override" title="Show this section regardless of day">
+            <input type="checkbox" ${isOverridden?'checked':''} onchange="togglePMOverride('${type}',this.checked)">
+            ${overrideLabel}
+          </label>`:''}
+          <svg class="pm-section-arrow ${isOpen?'open':''}" id="pm-arrow-${type}" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" onclick="event.stopPropagation();togglePMSection('${type}')"><path d="M6 9l6 6 6-6"/></svg>
+        </div>
+      </div>
+      ${stats.total>0?`<div style="padding:0 18px 6px;background:${type==='daily'?'var(--daily-hdr)':type==='weekly'?'var(--weekly-hdr)':'var(--monthly-hdr)'}">
+        <div class="pm-progress-wrap"><div class="pm-progress-bar" style="width:${stats.pct}%"></div></div>
+      </div>`:''}
+      <div class="pm-section-body ${isOpen?'open':''}" id="pm-body-${type}">
+        ${!showContent
+          ? `<div class="pm-locked"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>${lockMsg}</div>`
+          : machineRows
+        }
+      </div>
+    </div>`;
+  }
+
+  const dailyIcon=`<svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M2 12h2M20 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>`;
+  const weeklyIcon=`<svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM7 10h2v2H7zm4 0h2v2h-2z"/></svg>`;
+  const monthlyIcon=`<svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>`;
+
+  // Completion summary across all visible
+  const allDone=Object.keys(pmCompletions).filter(id=>fmIds.has(state.pmTasks.find(t=>t.id===id)?.machine_id)).length;
+
+  $('content').innerHTML=`
+    <div class="pm-topbar">
+      <div class="pm-meta">
+        ${state.pmTasks.length} total preventive tasks &mdash; showing <strong>${visible.length}</strong>
+        ${allDone>0?`&mdash; <span style="color:var(--green);font-weight:600">${allDone} completed this session</span>`:''}
+      </div>
+      <div class="filter-row" style="margin:0">
+        <select onchange="pmSite=this.value;pmLine='All';renderPMSchedule()">
+          ${siteOpts.map(s=>`<option value="${s.id}"${pmSite===s.id?' selected':''}>${s.label}</option>`).join('')}
+        </select>
+        <select onchange="pmLine=this.value;renderPMSchedule()">
+          ${lineOpts.map(l=>`<option value="${l}"${pmLine===l?' selected':''}>${l==='All'?'All Lines':l}</option>`).join('')}
+        </select>
+        <button class="btn btn-ghost btn-sm" onclick="pmSite='All';pmLine='All';renderPMSchedule()">Clear</button>
+      </div>
+    </div>
+    ${!visible.length?`<div class="card"><div class="empty">No preventive tasks for current filter.</div></div>`:''}
+    ${buildSection(daily,'daily','Daily Tasks',dailyIcon,true)}
+    ${buildSection(weekly,'weekly','Weekly Tasks',weeklyIcon,isMonday)}
+    ${buildSection(monthly,'monthly','Monthly &amp; Periodic Tasks',monthlyIcon,isFirstOfMonth)}
+  `;
+}
+
+function togglePMSection(type){
+  pmOpen[type]=!pmOpen[type];
+  const body=$(`pm-body-${type}`);
+  const arrow=$(`pm-arrow-${type}`);
+  if(body)body.classList.toggle('open',pmOpen[type]);
+  if(arrow)arrow.classList.toggle('open',pmOpen[type]);
+}
+
+function togglePMOverride(type,val){
+  pmOverrides[type]=val;
+  renderPMSchedule();
+}
+
+function setPMStaff(taskId,staffName){
+  // Pre-select staff for when they tick the checkbox
+  if(!pmCompletions[taskId]){
+    // Store pending staff selection temporarily in DOM attribute
+    const sel=$(`staff-${taskId}`);
+    if(sel)sel.dataset.pending=staffName;
+  }
+}
+
+async function togglePMComplete(taskId,type,checkbox){
+  if(checkbox.checked){
+    const sel=$(`staff-${taskId}`);
+    const staffName=sel?.value||sel?.dataset?.pending||'';
+    if(!staffName){
+      checkbox.checked=false;
+      showToast('Please select a staff member before marking complete.','error');
+      return;
+    }
+    const task=state.pmTasks.find(t=>t.id===taskId);
+    const now=new Date();
+    // Save to Supabase
+    const {data:saved,error}=await sb.from('pm_completions').insert({
+      pm_task_id:taskId,
+      machine_id:task?.machine_id||null,
+      completed_by:staffName,
+      completed_at:now.toISOString(),
+    }).select().single();
+    if(error){showToast('Could not save completion: '+error.message,'error');checkbox.checked=false;return;}
+    pmCompletions[taskId]={staffName,time:now,dbId:saved.id};
+    // Update row in-place without full re-render
+    const row=$(`row-${taskId}`);
+    if(row){
+      row.classList.add('done');
+      const stamp=$(`stamp-${taskId}`);
+      if(stamp)stamp.innerHTML=`<div class="pm-stamp">&#10003; ${esc(staffName)}<br><span style="font-weight:400;opacity:.7">${fmtTime(now)}</span></div>`;
+      if(sel){sel.disabled=true;}
+      updatePMProgress(type);
+    }
+    showToast('Task marked complete.');
+  } else {
+    const existing=pmCompletions[taskId];
+    if(existing?.dbId){
+      const {error}=await sb.from('pm_completions').delete().eq('id',existing.dbId);
+      if(error){showToast('Could not remove completion: '+error.message,'error');checkbox.checked=true;return;}
+    }
+    delete pmCompletions[taskId];
+    const row=$(`row-${taskId}`);
+    if(row){
+      row.classList.remove('done');
+      const stamp=$(`stamp-${taskId}`);
+      if(stamp)stamp.innerHTML='';
+      const sel=$(`staff-${taskId}`);
+      if(sel){sel.disabled=false;}
+      updatePMProgress(type);
+    }
+  }
+}
+
+function updatePMProgress(type){
+  // Recalculate progress for a section without full re-render
+  const now=new Date();
+  const dow=now.getDay();
+  const dom=now.getDate();
+  const sfMachines=pmSite==='All'?state.machines:state.machines.filter(m=>m.site_id===pmSite);
+  const fmIds=new Set((pmSite==='All'&&pmLine==='All'?state.machines:state.machines.filter(m=>{
+    const sm=pmSite==='All'||m.site_id===pmSite;
+    const lm=pmLine==='All'||m.location_zone===pmLine;
+    return sm&&lm;
+  })).map(m=>m.id));
+  const visible=state.pmTasks.filter(t=>fmIds.has(t.machine_id));
+  const sectionTasks=type==='daily'?visible.filter(t=>t.frequency==='Daily'):type==='weekly'?visible.filter(t=>t.frequency==='Weekly'):visible.filter(t=>!['Daily','Weekly'].includes(t.frequency));
+  const done=sectionTasks.filter(t=>pmCompletions[t.id]).length;
+  const total=sectionTasks.length;
+  const pct=total?Math.round(done/total*100):0;
+  // Update progress bar width
+  const sec=$(`pm-sec-${type}`);
+  if(sec){
+    const bar=sec.querySelector('.pm-progress-bar');
+    if(bar)bar.style.width=pct+'%';
+    // Update count chip
+    const chip=sec.querySelector('.pm-complete-chip');
+    if(done>0){
+      if(chip){chip.textContent=`${done}/${total} done`;}
+      else{
+        const left=sec.querySelector('.pm-section-left');
+        if(left){const c=document.createElement('span');c.className='pm-complete-chip';c.textContent=`${done}/${total} done`;left.appendChild(c);}
+      }
+    } else if(chip){chip.remove();}
+  }
+}
+
+
+// ══════════════════════════════════════════════════════════
+// COMPLETION AUDIT
+// ══════════════════════════════════════════════════════════
+let auditSite='All', auditLine='All', auditRange='30', auditSearch='', auditExpanded={};
+
+async function renderAudit(){
+  $('content').innerHTML='<div class="loading"><div class="spinner"></div> Loading audit data…</div>';
+
+  // Date range
+  const now=new Date();
+  const rangeStart=new Date(now);
+  if(auditRange==='7') rangeStart.setDate(now.getDate()-7);
+  else if(auditRange==='30') rangeStart.setDate(now.getDate()-30);
+  else rangeStart.setFullYear(now.getFullYear()-1);
+
+  // Fetch completions for range
+  const {data:comps,error}=await sb.from('pm_completions')
+    .select('*')
+    .gte('completed_at',rangeStart.toISOString())
+    .order('completed_at',{ascending:false});
+
+  if(error){$('content').innerHTML=`<div class="empty">Error loading audit data: ${esc(error.message)}</div>`;return;}
+
+  // Filter machines by site/line
+  const filteredMachines=state.machines.filter(m=>{
+    const sm=auditSite==='All'||m.site_id===auditSite;
+    const lm=auditLine==='All'||m.location_zone===auditLine;
+    return sm&&lm;
+  });
+  const fmIds=new Set(filteredMachines.map(m=>m.id));
+
+  // Get visible tasks
+  const visibleTasks=state.pmTasks.filter(t=>fmIds.has(t.machine_id));
+
+  // Expected completions per task for the period
+  function expectedCount(freq){
+    const days=parseInt(auditRange==='365'?365:auditRange==='30'?30:7);
+    if(freq==='Daily') return days;
+    if(freq==='Weekly') return Math.floor(days/7);
+    if(freq==='Monthly') return Math.floor(days/30);
+    return 1;
+  }
+
+  // Group completions by task_id
+  const compsByTask={};
+  (comps||[]).forEach(c=>{
+    if(!compsByTask[c.pm_task_id]) compsByTask[c.pm_task_id]=[];
+    compsByTask[c.pm_task_id].push(c);
+  });
+
+  // Build rows — filter by search
+  const rows=visibleTasks.filter(t=>{
+    if(!auditSearch) return true;
+    const m=getMachine(t.machine_id);
+    return t.task_name.toLowerCase().includes(auditSearch.toLowerCase())
+      ||(m?.name||'').toLowerCase().includes(auditSearch.toLowerCase())
+      ||(m?.machine_code||'').toLowerCase().includes(auditSearch.toLowerCase());
+  });
+
+  // Summary stats
+  const totalTasks=rows.length;
+  const tasksWithAnyCompletion=rows.filter(t=>(compsByTask[t.id]||[]).length>0).length;
+  const totalCompletions=rows.reduce((s,t)=>s+(compsByTask[t.id]||[]).length,0);
+  const overallPct=totalTasks?Math.round(tasksWithAnyCompletion/totalTasks*100):0;
+
+  // Site/line filter options
+  const siteOpts=['All',...new Set(state.machines.filter(m=>m.site_id).map(m=>m.site_id))].map(sid=>{
+    if(sid==='All')return{id:'All',label:'All Sites'};
+    const s=state.sites.find(x=>x.id===sid);return{id:sid,label:s?.name||sid};
+  });
+  const sfm=auditSite==='All'?state.machines:state.machines.filter(m=>m.site_id===auditSite);
+  const lineOpts=['All',...new Set(sfm.filter(m=>m.location_zone).map(m=>m.location_zone))];
+
+  // Colour for % badge
+  function pctColor(pct){ return pct>=80?'#22c55e':pct>=50?'#f97316':'#ef4444'; }
+  function pctBg(pct){ return pct>=80?'rgba(34,197,94,.12)':pct>=50?'rgba(249,115,22,.12)':'rgba(239,68,68,.12)'; }
+
+  // Build table rows
+  const tableRows=rows.map(t=>{
+    const m=getMachine(t.machine_id);
+    const site=state.sites.find(s=>s.id===m?.site_id);
+    const tc=compsByTask[t.id]||[];
+    const exp=expectedCount(t.frequency);
+    const actual=tc.length;
+    const pct=exp>0?Math.min(100,Math.round(actual/exp*100)):0;
+    const isExp=auditExpanded[t.id];
+
+    const detailRows=isExp?tc.map(c=>`
+      <div style="display:grid;grid-template-columns:160px 1fr 120px;gap:0;padding:7px 12px 7px 48px;border-bottom:1px solid rgba(48,54,61,.4);font-size:12px;background:var(--bg)">
+        <span style="color:var(--muted)">${new Date(c.completed_at).toLocaleString('en-AU',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'})}</span>
+        <span style="color:var(--text);font-weight:500">${esc(c.completed_by)}</span>
+        <span style="color:var(--muted);font-size:11px">${esc(c.shift||'')}</span>
+      </div>`).join(''):'';
+
+    return`<div>
+      <div style="display:grid;grid-template-columns:36px 1fr 140px 80px 90px 100px 80px;align-items:center;padding:0;border-bottom:1px solid rgba(48,54,61,.5);cursor:pointer;transition:background .1s" 
+           onclick="auditExpanded['${t.id}']=!auditExpanded['${t.id}'];renderAudit()" 
+           onmouseover="this.style.background='rgba(255,255,255,.03)'" onmouseout="this.style.background=''">
+        <div style="padding:10px;text-align:center;color:var(--muted);font-size:14px">${isExp?'▾':'▸'}</div>
+        <div style="padding:10px 12px">
+          <div style="font-weight:500;font-size:13px">${esc(t.task_name)}</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:2px">${esc(m?.machine_code||'')} · ${esc(m?.name||'')} · ${esc(site?.name||'')}${m?.location_zone?' · '+m.location_zone:''}</div>
+        </div>
+        <div style="padding:10px 12px">
+          <span class="badge" style="background:rgba(255,255,255,.07);color:var(--muted)">${t.frequency}</span>
+        </div>
+        <div style="padding:10px 12px;font-size:13px;color:var(--muted);text-align:center">${exp}</div>
+        <div style="padding:10px 12px;font-size:13px;font-weight:700;text-align:center;color:${actual>0?'var(--text)':'var(--muted)'}">${actual}</div>
+        <div style="padding:10px 12px;text-align:center">
+          <span style="background:${pctBg(pct)};color:${pctColor(pct)};padding:3px 10px;border-radius:4px;font-family:var(--fd);font-size:13px;font-weight:700">${pct}%</span>
+        </div>
+        <div style="padding:10px 12px;text-align:center">
+          ${actual>0?`<span style="font-size:11px;color:var(--muted)">${tc.length} record${tc.length!==1?'s':''}</span>`:'<span style="font-size:11px;color:rgba(239,68,68,.6)">None</span>'}
+        </div>
+      </div>
+      ${detailRows}
+    </div>`;
+  }).join('');
+
+  $('content').innerHTML=`
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:16px">
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <select class="btn btn-ghost btn-sm" style="padding:6px 11px" onchange="auditRange=this.value;renderAudit()">
+          <option value="7"${auditRange==='7'?' selected':''}>Last 7 days</option>
+          <option value="30"${auditRange==='30'?' selected':''}>Last 30 days</option>
+          <option value="365"${auditRange==='365'?' selected':''}>Last 12 months</option>
+        </select>
+        <select style="width:160px" onchange="auditSite=this.value;auditLine='All';renderAudit()">
+          ${siteOpts.map(s=>`<option value="${s.id}"${auditSite===s.id?' selected':''}>${s.label}</option>`).join('')}
+        </select>
+        <select style="width:160px" onchange="auditLine=this.value;renderAudit()">
+          ${lineOpts.map(l=>`<option value="${l}"${auditLine===l?' selected':''}>${l==='All'?'All Lines':l}</option>`).join('')}
+        </select>
+        <input placeholder="Search task or machine…" value="${esc(auditSearch)}" oninput="auditSearch=this.value;renderAudit()" style="width:220px">
+        <button class="btn btn-ghost btn-sm" onclick="auditSite='All';auditLine='All';auditSearch='';auditRange='30';renderAudit()">Clear</button>
+      </div>
+    </div>
+
+    <div class="stat-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:16px">
+      <div class="stat"><div class="stat-num" style="color:var(--accent)">${totalTasks}</div><div class="stat-label">Tasks in scope</div></div>
+      <div class="stat ${overallPct>=80?'ok-card':overallPct>=50?'warn-card':'alert-card'}">
+        <div class="stat-num" style="color:${pctColor(overallPct)}">${overallPct}%</div>
+        <div class="stat-label">Tasks with any completion</div>
+      </div>
+      <div class="stat"><div class="stat-num" style="color:var(--pureau)">${totalCompletions}</div><div class="stat-label">Total completions logged</div></div>
+      <div class="stat ${tasksWithAnyCompletion===totalTasks?'ok-card':'warn-card'}">
+        <div class="stat-num" style="color:${tasksWithAnyCompletion===totalTasks?'var(--green)':'var(--orange)'}">${totalTasks-tasksWithAnyCompletion}</div>
+        <div class="stat-label">Tasks with no record</div>
+      </div>
+    </div>
+
+    <div class="card" style="padding:0;overflow:hidden">
+      <div style="display:grid;grid-template-columns:36px 1fr 140px 80px 90px 100px 80px;background:var(--navy);padding:0">
+        <div style="padding:10px"></div>
+        <div style="padding:10px 12px;font-family:var(--fd);font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:rgba(255,255,255,.6)">Task / Machine</div>
+        <div style="padding:10px 12px;font-family:var(--fd);font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:rgba(255,255,255,.6)">Frequency</div>
+        <div style="padding:10px 12px;font-family:var(--fd);font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:rgba(255,255,255,.6);text-align:center">Expected</div>
+        <div style="padding:10px 12px;font-family:var(--fd);font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:rgba(255,255,255,.6);text-align:center">Actual</div>
+        <div style="padding:10px 12px;font-family:var(--fd);font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:rgba(255,255,255,.6);text-align:center">Rate</div>
+        <div style="padding:10px 12px;font-family:var(--fd);font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:rgba(255,255,255,.6);text-align:center">Records</div>
+      </div>
+      ${rows.length?tableRows:`<div class="empty">No tasks match the current filters.</div>`}
+    </div>
+    ${rows.length?`<div style="font-size:12px;color:var(--muted);margin-top:8px;text-align:right">Click any row to expand completion records · ${totalCompletions} total completion${totalCompletions!==1?'s':''} logged</div>`:''}
+  `;
+}
+
+// ══════════════════════════════════════════════════════════
+// MACHINES
+// ══════════════════════════════════════════════════════════
+let machineSearch='',machineSite='All',machineTab='tasks',selectedMachine=null;
+
+function renderMachines(){
+  const siteOptions=['All',...new Set(state.machines.map(m=>m.site_id))].map(sid=>{
+    if(sid==='All')return{id:'All',label:'All Sites'};
+    const s=state.sites.find(x=>x.id===sid);return{id:sid,label:s?.name||sid};
+  });
+  const filtered=state.machines.filter(m=>{
+    const sm=machineSite==='All'||m.site_id===machineSite;
+    const qm=!machineSearch||m.name.toLowerCase().includes(machineSearch.toLowerCase())||m.machine_code.toLowerCase().includes(machineSearch.toLowerCase());
+    return sm&&qm;
+  });
+  let html=`<div style="display:grid;grid-template-columns:${selectedMachine?'1fr 360px':'1fr'};gap:18px;align-items:start">
+  <div>
+    <div class="filter-row">
+      <input placeholder="Search machines…" value="${esc(machineSearch)}" oninput="machineSearch=this.value;renderMachines()">
+      <select onchange="machineSite=this.value;renderMachines()">${siteOptions.map(s=>`<option value="${s.id}"${machineSite===s.id?' selected':''}>${s.label}</option>`).join('')}</select>
+      <button class="btn btn-primary btn-sm" onclick="openMachineModal(null)">+ Add Machine</button>
+    </div>
+    <div class="machine-grid">
+    ${filtered.map(m=>`<div class="mcard${selectedMachine?.id===m.id?' sel':''}" style="border-left-color:${crit(m.criticality)}" onclick="selectMachine('${m.id}')">
+      <div class="mcard-name">${esc(m.name)}</div>
+      <div class="mcard-meta"><span>${esc(m.machine_code)}</span><span>${esc(m.category||'')}</span><span>${esc(m.location_zone||'')}</span></div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">${critBadge(m.criticality)}${statusBadge(m.status)}</div>
+    </div>`).join('')}
+    ${!filtered.length?'<div class="empty" style="grid-column:1/-1">No machines match.</div>':''}
+    </div>
+  </div>
+  ${selectedMachine?renderMachinePanel():''}
+  </div>`;
+  $('content').innerHTML=html;
+}
+
+function selectMachine(id){ selectedMachine=state.machines.find(m=>m.id===id)||null; machineTab='tasks'; renderMachines(); }
+
+function renderMachinePanel(){
+  const m=selectedMachine;if(!m)return'';
+  const site=state.sites.find(s=>s.id===m.site_id);
+  const tasks=state.pmTasks.filter(t=>t.machine_id===m.id);
+  const parts=state.spareParts.filter(p=>p.machine_id===m.id);
+  const wos=state.workOrders.filter(w=>w.machine_id===m.id).slice(0,10);
+  const tabs=['tasks','parts','history'];
+  const tabLabels={tasks:`Prev. Tasks (${tasks.length})`,parts:`Parts (${parts.length})`,history:`WOs (${wos.length})`};
+  let body='';
+  if(machineTab==='tasks'){
+    body=tasks.length?`<table class="tbl"><thead><tr><th>Task</th><th>Freq</th><th>Craft</th><th>Est.</th></tr></thead><tbody>${tasks.map(t=>`<tr><td><div style="font-weight:500;font-size:12px">${esc(t.task_name)}</div><div style="font-size:10px;color:var(--muted)">${esc(t.sop_reference||'')}</div></td><td><span class="badge" style="background:rgba(255,255,255,.07);color:var(--muted)">${t.frequency}</span></td><td style="font-size:11px;color:var(--muted)">${esc(t.craft||'')}</td><td style="font-size:11px;color:var(--muted)">${t.estimated_duration_mins?t.estimated_duration_mins+'m':'—'}</td></tr>`).join('')}</tbody></table>`:'<div class="empty">No preventive tasks configured.</div>';
+  } else if(machineTab==='parts'){
+    body=parts.length?parts.map(p=>`<div style="padding:10px 0;border-bottom:1px solid var(--border)"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span style="font-weight:500;font-size:13px">${esc(p.name)}</span>${stockBadge(p)}</div><div style="font-size:11px;color:var(--muted);margin-top:3px">Bin: ${esc(p.bin_location||'—')} · Qty: ${p.current_qty} / min ${p.min_qty}</div></div>`).join(''):'<div class="empty">No spare parts linked.</div>';
+  } else {
+    body=wos.length?wos.map(w=>`<div style="padding:10px 0;border-bottom:1px solid var(--border)"><div style="display:flex;justify-content:space-between;margin-bottom:2px"><span style="font-family:monospace;font-size:11px;color:var(--accent)">${esc(w.wo_number)}</span><span style="font-size:11px;color:var(--muted)">${fmtDate(w.date_raised)}</span></div><div style="font-size:13px;font-weight:500;margin-bottom:3px">${esc(w.title)}</div><div style="display:flex;gap:6px">${woBadge(w.wo_type)}${woStatusBadge(w.status)}</div></div>`).join(''):'<div class="empty">No work orders.</div>';
+  }
+  return`<div class="card" style="position:sticky;top:0;max-height:calc(100vh - 120px);overflow-y:auto">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px">
+      <div><div style="font-family:var(--fd);font-size:19px;font-weight:700">${esc(m.name)}</div><div style="font-size:12px;color:var(--muted);margin-top:2px">${esc(m.machine_code)} · ${esc(site?.name||'')}</div></div>
+      <div style="display:flex;gap:6px"><button class="btn btn-primary btn-sm" onclick="openMachineModal('${m.id}')">Edit</button><button class="btn btn-ghost btn-sm" onclick="selectedMachine=null;renderMachines()">&#x2715;</button></div>
+    </div>
+    <div style="background:var(--surface2);border-radius:var(--r);padding:12px;margin-bottom:14px">
+      ${[['OEM',m.oem_manufacturer],['Category',m.category],['Zone',m.location_zone],['Status',m.status],['Criticality',m.criticality]].map(([k,v])=>v?`<div class="drow"><span class="dkey">${k}</span><span class="dval">${esc(v)}</span></div>`:'').join('')}
+    </div>
+    <div class="tabs">${tabs.map(t=>`<div class="tab${machineTab===t?' active':''}" onclick="machineTab='${t}';renderMachines()">${tabLabels[t]}</div>`).join('')}</div>
+    ${body}
+  </div>`;
+}
+
+// ══════════════════════════════════════════════════════════
+// LOG PM
+// ══════════════════════════════════════════════════════════
+let pmForm={machineId:'',taskId:'',tech:'',date:todayStr(),duration:'',notes:''};
+
+function renderLogPM(){
+  const tasks=pmForm.machineId?state.pmTasks.filter(t=>t.machine_id===pmForm.machineId):[];
+  $('content').innerHTML=`<div style="max-width:580px"><div class="card">
+    <div class="card-title">Log Completed Preventive Task</div>
+    <div class="form-grid">
+      <div class="fg"><label>Date</label><input type="date" value="${pmForm.date}" onchange="pmForm.date=this.value"></div>
+      <div class="fg"><label>Machine</label><select onchange="pmForm.machineId=this.value;pmForm.taskId='';renderLogPM()"><option value="">— Select —</option>${state.machines.map(m=>`<option value="${m.id}"${pmForm.machineId===m.id?' selected':''}>${esc(m.name)}</option>`).join('')}</select></div>
+      <div class="fg full"><label>Preventive Task</label><select onchange="pmForm.taskId=this.value" ${!pmForm.machineId?'disabled':''}><option value="">— Select task —</option>${tasks.map(t=>`<option value="${t.id}"${pmForm.taskId===t.id?' selected':''}>${esc(t.task_name)} (${t.frequency})</option>`).join('')}</select></div>
+      <div class="fg"><label>Technician *</label><select onchange="pmForm.tech=this.value"><option value="">— Select —</option>${(pmForm.machineId?getEligibleStaff(pmForm.machineId):state.staff).map(s=>`<option value="${esc(s.name)}"${pmForm.tech===s.name?' selected':''}>${esc(s.name)}${s.role==='Maintenance Manager'?' ★':''}</option>`).join('')}</select></div>
+      <div class="fg"><label>Duration (hrs)</label><input type="number" step="0.25" value="${pmForm.duration}" onchange="pmForm.duration=this.value" placeholder="e.g. 0.75"></div>
+      <div class="fg full"><label>Notes / Observations</label><textarea onchange="pmForm.notes=this.value" placeholder="Parts used, issues noted…">${esc(pmForm.notes)}</textarea></div>
+    </div>
+    <div style="margin-top:16px"><button class="btn btn-primary" onclick="submitPM()" id="pm-btn"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg> Log Work Order</button></div>
+  </div></div>`;
+}
+
+async function submitPM(){
+  if(!pmForm.machineId||!pmForm.taskId||!pmForm.tech){showToast('Machine, task and technician required.','error');return;}
+  const btn=$('pm-btn');btn.disabled=true;btn.innerHTML='<div class="spinner"></div> Saving…';
+  const task=state.pmTasks.find(t=>t.id===pmForm.taskId);
+  const {data,error}=await sb.from('work_orders').insert({machine_id:pmForm.machineId,pm_task_id:pmForm.taskId,wo_type:'PM',status:'Closed',priority:'Planned',title:task?.task_name||'Preventive Task',date_raised:pmForm.date,actual_hours:parseFloat(pmForm.duration)||null,downtime_hours:0,notes:pmForm.notes||null,wo_number:''}).select().single();
+  if(error){showToast('Error: '+error.message,'error');btn.disabled=false;btn.textContent='Log Work Order';return;}
+  state.workOrders.unshift(data);
+  showToast(`Work order ${data.wo_number} logged.`);
+  pmForm={machineId:'',taskId:'',tech:'',date:todayStr(),duration:'',notes:''};
+  renderLogPM();
+}
+
+// ══════════════════════════════════════════════════════════
+// BREAKDOWN
+// ══════════════════════════════════════════════════════════
+let bdForm={machineId:'',priority:'High',desc:'',tech:'',duration:'',downtime:'',rootCause:'',action:'',date:todayStr(),isSafety:false};
+
+function renderBreakdown(){
+  $('content').innerHTML=`<div style="max-width:600px"><div class="card" style="border-color:rgba(239,68,68,.35)">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px">
+      <div style="background:rgba(239,68,68,.12);border-radius:6px;padding:8px;flex-shrink:0"><svg width="18" height="18" fill="none" stroke="#ef4444" stroke-width="2" viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0zM12 9v4m0 4h.01"/></svg></div>
+      <div><div class="card-title" style="margin:0;color:var(--red)">Raise Breakdown Work Order</div><div style="font-size:12px;color:var(--muted)">Complete all fields. Creates an Open work order.</div></div>
+    </div>
+    <div class="form-grid">
+      <div class="fg"><label>Date *</label><input type="date" value="${bdForm.date}" onchange="bdForm.date=this.value"></div>
+      <div class="fg"><label>Priority *</label><select onchange="bdForm.priority=this.value">${['Critical','High','Medium','Low'].map(p=>`<option${bdForm.priority===p?' selected':''}>${p}</option>`).join('')}</select></div>
+      <div class="fg full"><label>Machine *</label><select onchange="bdForm.machineId=this.value;bdForm.tech='';renderBreakdown()"><option value="">— Select machine —</option>${state.machines.map(m=>`<option value="${m.id}"${bdForm.machineId===m.id?' selected':''}>${esc(m.name)} (${esc(m.machine_code)})</option>`).join('')}</select></div>
+      <div class="fg full"><label>Failure Description *</label><textarea onchange="bdForm.desc=this.value" placeholder="What happened, what was observed…">${esc(bdForm.desc)}</textarea></div>
+      <div class="fg"><label>Technician *</label><select onchange="bdForm.tech=this.value"><option value="">— Select —</option>${(bdForm.machineId?getEligibleStaff(bdForm.machineId):state.staff).map(s=>`<option value="${esc(s.name)}"${bdForm.tech===s.name?' selected':''}>${esc(s.name)}${s.role==='Maintenance Manager'?' ★':''}</option>`).join('')}</select></div>
+      <div class="fg"><label>Safety Related?</label><select onchange="bdForm.isSafety=this.value==='Yes'"><option${!bdForm.isSafety?' selected':''}>No</option><option${bdForm.isSafety?' selected':''}>Yes</option></select></div>
+      <div class="fg"><label>Repair Duration (hrs)</label><input type="number" step="0.25" value="${bdForm.duration}" onchange="bdForm.duration=this.value" placeholder="e.g. 2.0"></div>
+      <div class="fg"><label>Downtime (hrs)</label><input type="number" step="0.25" value="${bdForm.downtime}" onchange="bdForm.downtime=this.value" placeholder="e.g. 1.5"></div>
+      <div class="fg full"><label>Root Cause</label><input value="${esc(bdForm.rootCause)}" onchange="bdForm.rootCause=this.value" placeholder="e.g. Seal wear, component age…"></div>
+      <div class="fg full"><label>Corrective Action Taken</label><textarea onchange="bdForm.action=this.value" placeholder="What was done to restore operation…">${esc(bdForm.action)}</textarea></div>
+    </div>
+    <div style="margin-top:16px"><button class="btn btn-danger" onclick="submitBreakdown()" id="bd-btn">Raise Work Order</button></div>
+  </div></div>`;
+}
+
+async function submitBreakdown(){
+  if(!bdForm.machineId||!bdForm.desc||!bdForm.tech){showToast('Machine, description and technician required.','error');return;}
+  const btn=$('bd-btn');btn.disabled=true;btn.innerHTML='<div class="spinner"></div> Saving…';
+  const {data,error}=await sb.from('work_orders').insert({machine_id:bdForm.machineId,wo_type:'Breakdown',status:'Open',priority:bdForm.priority,title:bdForm.desc.slice(0,200),description:bdForm.desc,root_cause:bdForm.rootCause||null,corrective_action:bdForm.action||null,date_raised:bdForm.date,actual_hours:parseFloat(bdForm.duration)||null,downtime_hours:parseFloat(bdForm.downtime)||0,is_safety_related:bdForm.isSafety,wo_number:''}).select().single();
+  if(error){showToast('Error: '+error.message,'error');btn.disabled=false;btn.textContent='Raise Work Order';return;}
+  await sb.from('alerts').insert({alert_type:'Breakdown Raised',machine_id:bdForm.machineId,work_order_id:data.id,title:`Breakdown: ${getMachine(bdForm.machineId)?.name}`,message:bdForm.desc.slice(0,300),priority:bdForm.priority,status:'Active'});
+  state.workOrders.unshift(data);state.openBreakdowns++;
+  showToast(`Breakdown ${data.wo_number} raised.`);
+  bdForm={machineId:'',priority:'High',desc:'',tech:'',duration:'',downtime:'',rootCause:'',action:'',date:todayStr(),isSafety:false};
+  renderNav();renderBreakdown();
+}
+
+// ══════════════════════════════════════════════════════════
+// SPARE PARTS
+// ══════════════════════════════════════════════════════════
+let stockSearch='',stockFilter='All',editingPart=null,editQty='',editReason='Adjustment';
+
+function renderStock(){
+  const filtered=state.spareParts.filter(p=>{
+    const ms=p.name.toLowerCase().includes(stockSearch.toLowerCase())||(p.part_code||'').toLowerCase().includes(stockSearch.toLowerCase());
+    if(stockFilter==='Out')return ms&&p.current_qty<=0;
+    if(stockFilter==='Alerts')return ms&&p.current_qty<=p.min_qty;
+    return ms;
+  });
+  const out=state.spareParts.filter(p=>p.current_qty<=0).length;
+  const low=state.spareParts.filter(p=>p.current_qty>0&&p.current_qty<=p.min_qty).length;
+  $('content').innerHTML=`
+  <div class="stat-grid" style="grid-template-columns:repeat(3,1fr)">
+    <div class="stat ${out?'alert-card':'ok-card'}"><div class="stat-num" style="color:${out?'var(--red)':'var(--green)'}">${out}</div><div class="stat-label">Out of Stock</div></div>
+    <div class="stat ${low?'warn-card':'ok-card'}"><div class="stat-num" style="color:${low?'var(--orange)':'var(--green)'}">${low}</div><div class="stat-label">Below Minimum</div></div>
+    <div class="stat"><div class="stat-num" style="color:var(--accent)">${state.spareParts.length}</div><div class="stat-label">Total Part Lines</div></div>
+  </div>
+  <div class="card">
+    <div class="filter-row">
+      <input placeholder="Search parts or code…" value="${esc(stockSearch)}" oninput="stockSearch=this.value;renderStock()">
+      <select onchange="stockFilter=this.value;renderStock()"><option${stockFilter==='All'?' selected':''}>All</option><option${stockFilter==='Alerts'?' selected':''}>Alerts</option><option${stockFilter==='Out'?' selected':''}>Out</option></select>
+    </div>
+    <div class="tbl-wrap"><table class="tbl">
+      <thead><tr><th>Part</th><th>Machine</th><th>Bin</th><th>Crit.</th><th>Qty</th><th>Min</th><th>Status</th><th>Action</th></tr></thead>
+      <tbody>${filtered.map(p=>{
+        const m=getMachine(p.machine_id);const isEditing=editingPart===p.id;
+        return`<tr><td><div style="font-weight:500">${esc(p.name)}</div><div style="font-size:10px;color:var(--muted);font-family:monospace">${esc(p.part_code||'')}</div></td><td style="font-size:12px;color:var(--muted)">${esc(m?.name||'General')}</td><td><code style="font-size:11px;color:var(--accent2)">${esc(p.bin_location||'—')}</code></td><td>${critBadge(p.criticality)}</td><td style="font-family:var(--fd);font-size:20px;font-weight:800;color:${p.current_qty<=0?'var(--red)':p.current_qty<=p.min_qty?'var(--orange)':'var(--text)'}">${p.current_qty}</td><td style="color:var(--muted)">${p.min_qty}</td><td>${stockBadge(p)}</td>
+        <td>${isEditing?`<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><input type="number" value="${editQty}" onchange="editQty=this.value" style="width:64px"><select onchange="editReason=this.value" style="width:110px">${['Receipt','Adjustment','Return','Write Off'].map(r=>`<option${editReason===r?' selected':''}>${r}</option>`).join('')}</select><button class="btn btn-primary btn-sm" onclick="saveStock('${p.id}',${p.current_qty})">Save</button><button class="btn btn-ghost btn-sm" onclick="editingPart=null;renderStock()">&#x2715;</button></div>`:`<button class="btn btn-ghost btn-sm" onclick="editingPart='${p.id}';editQty='${p.current_qty}';editReason='Adjustment';renderStock()">Update Qty</button>`}</td></tr>`;
+      }).join('')}${!filtered.length?'<tr><td colspan="8" class="empty">No parts match.</td></tr>':''}</tbody>
+    </table></div>
+  </div>`;
+}
+
+async function saveStock(partId,currentQty){
+  const newQty=parseFloat(editQty);
+  if(isNaN(newQty)||newQty<0){showToast('Invalid quantity.','error');return;}
+  const {error}=await sb.from('stock_transactions').insert({spare_part_id:partId,transaction_type:editReason,quantity:newQty-currentQty,qty_before:currentQty,qty_after:newQty,notes:'Manual update via app'});
+  if(error){showToast('Error: '+error.message,'error');return;}
+  const idx=state.spareParts.findIndex(p=>p.id===partId);
+  if(idx>-1)state.spareParts[idx].current_qty=newQty;
+  state.stockAlerts=state.spareParts.filter(p=>p.current_qty<=p.min_qty).length;
+  editingPart=null;showToast('Stock updated.');renderNav();renderStock();
+}
+
+// ══════════════════════════════════════════════════════════
+// WORK ORDERS
+// ══════════════════════════════════════════════════════════
+let woSearch='',woType='All',woStatus='All',selectedWO=null;
+
+function renderWorkOrders(){
+  const filtered=state.workOrders.filter(w=>{
+    const m=getMachine(w.machine_id);
+    const ms=(w.wo_number+' '+(m?.name||'')+' '+w.title).toLowerCase().includes(woSearch.toLowerCase());
+    return ms&&(woType==='All'||w.wo_type===woType)&&(woStatus==='All'||w.status===woStatus);
+  });
+  $('content').innerHTML=`<div style="display:grid;grid-template-columns:${selectedWO?'1fr 340px':'1fr'};gap:18px;align-items:start">
+    <div class="card">
+      <div class="filter-row">
+        <input placeholder="Search WO, machine, task…" value="${esc(woSearch)}" oninput="woSearch=this.value;renderWorkOrders()">
+        <select onchange="woType=this.value;renderWorkOrders()" style="width:130px"><option${woType==='All'?' selected':''}>All</option><option value="PM"${woType==='PM'?' selected':''}>Preventive</option><option${woType==='Breakdown'?' selected':''}>Breakdown</option></select>
+        <select onchange="woStatus=this.value;renderWorkOrders()" style="width:140px"><option value="All"${woStatus==='All'?' selected':''}>All Status</option><option${woStatus==='Open'?' selected':''}>Open</option><option${woStatus==='Closed'?' selected':''}>Closed</option><option value="In Progress"${woStatus==='In Progress'?' selected':''}>In Progress</option><option value="Awaiting Parts"${woStatus==='Awaiting Parts'?' selected':''}>Awaiting Parts</option></select>
+      </div>
+      <div class="tbl-wrap"><table class="tbl"><thead><tr><th>WO No.</th><th>Date</th><th>Machine</th><th>Title</th><th>Type</th><th>Downtime</th><th>Status</th></tr></thead><tbody>
+      ${filtered.map(w=>{const m=getMachine(w.machine_id);return`<tr class="row-click" onclick="selectedWO='${w.id}';renderWorkOrders()" style="${selectedWO===w.id?'background:rgba(240,180,41,.06)':''}"><td style="font-family:monospace;font-size:11px;color:var(--accent);white-space:nowrap">${esc(w.wo_number)}</td><td style="color:var(--muted);font-size:12px;white-space:nowrap">${fmtDate(w.date_raised)}</td><td style="font-size:12px">${esc(m?.name||'')}</td><td style="font-size:12px;max-width:220px">${esc(w.title)}</td><td>${woBadge(w.wo_type)}</td><td style="font-size:12px;color:${(parseFloat(w.downtime_hours)||0)>0?'var(--orange)':'var(--muted)'}">${(parseFloat(w.downtime_hours)||0)>0?w.downtime_hours+'h':'—'}</td><td>${woStatusBadge(w.status)}</td></tr>`;}).join('')}
+      ${!filtered.length?'<tr><td colspan="7" class="empty">No work orders match.</td></tr>':''}
+      </tbody></table></div>
+    </div>
+    ${selectedWO?renderWODetail():''}
+  </div>`;
+}
+
+function renderWODetail(){
+  const w=state.workOrders.find(x=>x.id===selectedWO);if(!w)return'';
+  const m=getMachine(w.machine_id);
+  const rows=[['Date',fmtDate(w.date_raised)],['Machine',m?.name||''],['Type',w.wo_type],['Priority',w.priority],['Status',w.status],['Actual Hours',w.actual_hours?w.actual_hours+'h':'—'],['Downtime',(parseFloat(w.downtime_hours)||0)>0?w.downtime_hours+'h':'None'],['Safety Related',w.is_safety_related?'YES':'No']].filter(([,v])=>v&&v!=='—'&&v!=='None');
+  return`<div class="card" style="position:sticky;top:0;max-height:calc(100vh - 120px);overflow-y:auto">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px"><div><div style="font-family:var(--fd);font-size:19px;font-weight:700">${esc(w.wo_number)}</div><div style="margin-top:4px">${woBadge(w.wo_type)}</div></div><button class="btn btn-ghost btn-sm" onclick="selectedWO=null;renderWorkOrders()">&#x2715;</button></div>
+    <div style="font-weight:600;font-size:13px;margin-bottom:12px">${esc(w.title)}</div>
+    <div style="background:var(--surface2);border-radius:var(--r);padding:12px;margin-bottom:14px">${rows.map(([k,v])=>`<div class="drow"><span class="dkey">${k}</span><span class="dval"${k==='Safety Related'&&v==='YES'?' style="color:var(--red)"':''}>${esc(v)}</span></div>`).join('')}</div>
+    ${w.description?`<div style="margin-bottom:12px"><div class="card-title">Description</div><p style="font-size:13px;color:var(--muted);line-height:1.6">${esc(w.description)}</p></div>`:''}
+    ${w.root_cause?`<div style="margin-bottom:12px"><div class="card-title">Root Cause</div><p style="font-size:13px;color:var(--muted);line-height:1.6">${esc(w.root_cause)}</p></div>`:''}
+    ${w.corrective_action?`<div style="margin-bottom:12px"><div class="card-title">Corrective Action</div><p style="font-size:13px;color:var(--muted);line-height:1.6">${esc(w.corrective_action)}</p></div>`:''}
+    ${w.notes?`<div><div class="card-title">Notes</div><p style="font-size:13px;color:var(--muted);line-height:1.6">${esc(w.notes)}</p></div>`:''}
+  </div>`;
+}
+
+// ══════════════════════════════════════════════════════════
+// COMPLIANCE
+// ══════════════════════════════════════════════════════════
+async function renderCompliance(){
+  $('content').innerHTML='<div class="loading"><div class="spinner"></div> Loading…</div>';
+  const {data,error}=await sb.from('statutory_requirements').select('*').eq('is_active',true).order('next_due_date');
+  if(error){$('content').innerHTML=`<div class="empty">Error loading compliance data.</div>`;return;}
+  const today=new Date();today.setHours(0,0,0,0);
+  const soon=new Date(today);soon.setDate(soon.getDate()+30);
+  const overdue=data.filter(r=>r.next_due_date&&new Date(r.next_due_date)<today).length;
+  const dueSoon=data.filter(r=>{const d=new Date(r.next_due_date);return r.next_due_date&&d>=today&&d<=soon;}).length;
+  $('content').innerHTML=`
+  ${overdue?`<div class="alert-strip">&#9888; ${overdue} compliance item${overdue>1?'s':''} overdue</div>`:''}
+  <div class="stat-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:16px">
+    <div class="stat ${overdue?'alert-card':'ok-card'}"><div class="stat-num" style="color:${overdue?'var(--red)':'var(--green)'}">${overdue}</div><div class="stat-label">Overdue</div></div>
+    <div class="stat ${dueSoon?'warn-card':'ok-card'}"><div class="stat-num" style="color:${dueSoon?'var(--orange)':'var(--green)'}">${dueSoon}</div><div class="stat-label">Due Within 30 Days</div></div>
+    <div class="stat"><div class="stat-num" style="color:var(--accent)">${data.length}</div><div class="stat-label">Total Requirements</div></div>
+  </div>
+  <div class="card"><div class="card-title">Statutory & Compliance Register</div>
+  ${!data.length?'<div class="empty">No requirements configured. Use Setup to import.</div>':''}
+  <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Machine</th><th>Requirement</th><th>Regulation</th><th>Responsible</th><th>Last Done</th><th>Next Due</th><th>Status</th></tr></thead><tbody>
+  ${data.map(r=>{const m=getMachine(r.machine_id);const due=r.next_due_date?new Date(r.next_due_date):null;if(due)due.setHours(0,0,0,0);const isOverdue=due&&due<today;const isSoon=due&&!isOverdue&&due<=soon;const sl=isOverdue?'OVERDUE':isSoon?'DUE SOON':'OK';const sbg=isOverdue?'rgba(239,68,68,.15)':isSoon?'rgba(249,115,22,.15)':'rgba(34,197,94,.1)';const sc=isOverdue?'#ef4444':isSoon?'#f97316':'#22c55e';return`<tr style="${isOverdue?'background:rgba(239,68,68,.04)':''}"><td style="font-size:12px">${esc(m?.name||'—')}</td><td style="font-weight:500">${esc(r.requirement_name)}</td><td style="font-size:12px;color:var(--muted)">${esc(r.regulation||'—')}</td><td style="font-size:12px">${esc(r.responsible_party||'—')}</td><td style="font-size:12px;color:var(--muted)">${fmtDate(r.last_inspection_date)}</td><td style="font-size:12px;font-weight:${isOverdue?'700':'400'};color:${isOverdue?'var(--red)':isSoon?'var(--orange)':'var(--text)'}">${fmtDate(r.next_due_date)}</td><td>${badge(sl,sbg,sc)}</td></tr>`;}).join('')}
+  </tbody></table></div></div>`;
+}
+
+// ══════════════════════════════════════════════════════════
+// SETUP
+// ══════════════════════════════════════════════════════════
+function renderSetup(){
+  $('content').innerHTML=`<div style="max-width:680px;display:flex;flex-direction:column;gap:16px">
+    <div class="card"><div class="card-title">Database Status</div>
+      ${[['Machines',state.machines.length],['PM Tasks',state.pmTasks.length],['Spare Parts',state.spareParts.length],['Work Orders',state.workOrders.length],['Staff',state.staff.length],['Statutory Requirements',state.statutory.length],['Sites',state.sites.length]].map(([k,v])=>`<div class="drow"><span class="dkey">${k}</span><span class="dval" style="color:${v>0?'var(--accent)':'var(--muted)'}">${v}</span></div>`).join('')}
+    </div>
+    <div class="card"><div class="card-title">Import Staff</div>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:16px;line-height:1.6">Creates Staff 1 through Staff 5 as placeholder records. Edit names directly in Supabase once the system is live.</p>
+      <button class="btn btn-primary" onclick="importStaff()" id="import-staff-btn" ${state.staff.length>=5?'disabled':''}>
+        ${state.staff.length>=5?'Staff already imported':'Import Staff Placeholders'}
+      </button>
+    </div>
+    <div class="card"><div class="card-title">Import Machines</div>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:16px;line-height:1.6">Import all 22 machines. Duplicates are skipped automatically.</p>
+      <button class="btn btn-primary" onclick="importMachines()" id="import-machines-btn">Import All 22 Machines</button>
+    </div>
+    <div class="card"><div class="card-title">Import Preventive Tasks</div>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:16px;line-height:1.6">Imports all preventive maintenance tasks. Machines must be imported first.</p>
+      <button class="btn btn-primary" onclick="importPMTasks()" id="import-pm-btn" ${!state.machines.length?'disabled':''}>Import Preventive Tasks</button>
+    </div>
+    <div class="card"><div class="card-title">Import Spare Parts</div>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:16px;line-height:1.6">Imports all spare parts with stock levels. Machines must be imported first.</p>
+      <button class="btn btn-primary" onclick="importParts()" id="import-parts-btn" ${!state.machines.length?'disabled':''}>Import Spare Parts</button>
+    </div>
+    <div class="card" style="border-color:rgba(192,132,252,.4)"><div class="card-title" style="color:var(--purple)">Import Statutory &amp; Compliance</div>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:16px;line-height:1.6">Imports all statutory and compliance obligations including pressure vessel inspections and electrical requirements.</p>
+      <button class="btn btn-primary" onclick="importStatutory()" id="import-stat-btn">Import Statutory &amp; Compliance</button>
+    </div>
+    <div class="card" style="border-color:rgba(239,68,68,.3)"><div class="card-title" style="color:var(--red)">Danger Zone</div>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:16px">Clear all work orders from the database. Cannot be undone.</p>
+      <button class="btn btn-danger btn-sm" onclick="if(confirm('Delete ALL work orders? Cannot be undone.'))clearWorkOrders()">Clear All Work Orders</button>
+    </div>
+  </div>`;
+}
+
+// ── STAFF SEED ────────────────────────────────────────────
+const STAFF_SEED=[
+  {name:'Staff 1',role:'Operator',is_active:true},
+  {name:'Staff 2',role:'Operator',is_active:true},
+  {name:'Staff 3',role:'Maintenance Tech',is_active:true},
+  {name:'Staff 4',role:'Maintenance Tech',is_active:true},
+  {name:'Staff 5',role:'Supervisor',is_active:true},
+];
+
+async function importStaff(){
+  const btn=$('import-staff-btn');btn.disabled=true;btn.innerHTML='<div class="spinner"></div> Importing…';
+  let ok=0,skip=0;
+  for(const s of STAFF_SEED){
+    const {error}=await sb.from('staff').upsert(s,{onConflict:'name',ignoreDuplicates:true});
+    if(error)skip++;else ok++;
+  }
+  const fresh=await sb.from('staff').select('*').eq('is_active',true).order('name');
+  state.staff=fresh.data||[];
+  showToast(`Imported ${ok} staff. ${skip} skipped.`);
+  renderSetup();
+}
+
+// ── MACHINE SEED ──────────────────────────────────────────
+const MACHINE_SEED=[
+  {machine_code:'MCH-001',name:'Scholle Filler Line A',category:'Filling',oem_manufacturer:'Scholle Packaging',country_of_origin:'USA',criticality:'Critical',status:'Active',location_zone:'Line A'},
+  {machine_code:'MCH-002',name:'Scholle Filler Line B',category:'Filling',oem_manufacturer:'Scholle Packaging',country_of_origin:'USA',criticality:'Critical',status:'Active',location_zone:'Line B'},
+  {machine_code:'MCH-003',name:'HMPS Scholle Filler 1',category:'Filling',oem_manufacturer:'Scholle Packaging / HMPS',country_of_origin:'USA/AUS',criticality:'Critical',status:'Active',location_zone:'HMPS Line'},
+  {machine_code:'MCH-004',name:'HMPS Scholle Filler 2',category:'Filling',oem_manufacturer:'Scholle Packaging / HMPS',country_of_origin:'USA/AUS',criticality:'Critical',status:'Active',location_zone:'HMPS Line'},
+  {machine_code:'MCH-005',name:'Recopak Pack Line A',category:'Packaging',oem_manufacturer:'Recopak',country_of_origin:'AUS',criticality:'High',status:'Active',location_zone:'Line A'},
+  {machine_code:'MCH-006',name:'Recopak Pack Line B',category:'Packaging',oem_manufacturer:'Recopak',country_of_origin:'AUS',criticality:'High',status:'Active',location_zone:'Line B'},
+  {machine_code:'MCH-007',name:'Line A Glue Guns',category:'Packaging',oem_manufacturer:'Nordson / ITW',country_of_origin:'USA',criticality:'Medium',status:'Active',location_zone:'Line A'},
+  {machine_code:'MCH-008',name:'Line B Glue Guns',category:'Packaging',oem_manufacturer:'Nordson / ITW',country_of_origin:'USA',criticality:'Medium',status:'Active',location_zone:'Line B'},
+  {machine_code:'MCH-009',name:'Line A Date Coder',category:'Coding',oem_manufacturer:'Videojet / Markem',country_of_origin:'USA',criticality:'High',status:'Active',location_zone:'Line A'},
+  {machine_code:'MCH-010',name:'HMPS Date Coder',category:'Coding',oem_manufacturer:'Videojet / Markem',country_of_origin:'USA',criticality:'High',status:'Active',location_zone:'HMPS Line'},
+  {machine_code:'MCH-011',name:'600ml Date Coder',category:'Coding',oem_manufacturer:'Videojet / Markem',country_of_origin:'USA',criticality:'High',status:'Active',location_zone:'600ml Line'},
+  {machine_code:'MCH-012',name:'Line B Date Coder',category:'Coding',oem_manufacturer:'Videojet / Markem',country_of_origin:'USA',criticality:'High',status:'Active',location_zone:'Line B'},
+  {machine_code:'MCH-013',name:'2 Litre Date Coder',category:'Coding',oem_manufacturer:'Videojet / Markem',country_of_origin:'USA',criticality:'High',status:'Active',location_zone:'2L Line'},
+  {machine_code:'MCH-014',name:'HMPS Dual Index Carton Erector',category:'Carton Erecting',oem_manufacturer:'HMPS',country_of_origin:'AUS',criticality:'Critical',status:'Active',location_zone:'HMPS Line'},
+  {machine_code:'MCH-015',name:'Bottle De-Scrambler 600ml',category:'Bottle Handling',oem_manufacturer:'Pace Packaging / IMA',country_of_origin:'USA/ITA',criticality:'High',status:'Active',location_zone:'600ml Line'},
+  {machine_code:'MCH-016',name:'Splat Rinser',category:'Rinsing',oem_manufacturer:'Kosme / Sidel',country_of_origin:'ITA',criticality:'High',status:'Active',location_zone:'Line A'},
+  {machine_code:'MCH-017',name:'Icon Filler Dual Head Labeller',category:'Labelling',oem_manufacturer:'Herma / Krones',country_of_origin:'GER',criticality:'High',status:'Active',location_zone:'Line A'},
+  {machine_code:'MCH-018',name:'Shrink Tunnel',category:'Packaging',oem_manufacturer:'Conflex / Sontara',country_of_origin:'USA',criticality:'High',status:'Active',location_zone:'Line A'},
+  {machine_code:'MCH-019',name:'2 Litre Bottle Rinser',category:'Rinsing',oem_manufacturer:'Kosme / Sidel',country_of_origin:'ITA',criticality:'High',status:'Active',location_zone:'2L Line'},
+  {machine_code:'MCH-020',name:'2 Litre Bottle Filler',category:'Filling',oem_manufacturer:'Krones / GEA',country_of_origin:'GER',criticality:'Critical',status:'Active',location_zone:'2L Line'},
+  {machine_code:'MCH-021',name:'2 Litre Bottle Over Packer',category:'Packaging',oem_manufacturer:'Recopak / SMI',country_of_origin:'AUS/ITA',criticality:'High',status:'Active',location_zone:'2L Line'},
+  {machine_code:'MCH-022',name:'5 Litre Compressor',category:'Utilities',oem_manufacturer:'Atlas Copco / Ingersoll Rand',country_of_origin:'SWE/USA',criticality:'Critical',status:'Active',location_zone:'Utilities'},
+];
+
+async function importMachines(){
+  const btn=$('import-machines-btn');btn.disabled=true;btn.innerHTML='<div class="spinner"></div> Importing…';
+  const sites=await sb.from('sites').select('*');
+  const ep=sites.data?.find(s=>s.name==='Erskine Park');
+  const sm=sites.data?.find(s=>s.name==='St Marys');
+  const stMarysMachines=['MCH-003','MCH-004','MCH-010','MCH-014'];
+  let ok=0,skip=0;
+  for(const m of MACHINE_SEED){
+    const siteId=stMarysMachines.includes(m.machine_code)?sm?.id:ep?.id;
+    const {error}=await sb.from('machines').upsert({...m,site_id:siteId},{onConflict:'machine_code',ignoreDuplicates:true});
+    if(error)skip++;else ok++;
+  }
+  const fresh=await sb.from('machines').select('*').order('machine_code');
+  state.machines=fresh.data||[];
+  showToast(`Imported ${ok} machines. ${skip} skipped.`);
+  btn.disabled=false;btn.textContent='Import All 22 Machines';renderSetup();
+}
+
+const PM_SEED=[
+  {task_code:'PM-001',machine_code:'MCH-001',task_name:'Inspect & clean filling valve seats',frequency:'Daily',trigger_type:'Time',frequency_days:1,craft:'Operator',estimated_duration_mins:15,sop_reference:'SOP-MCH001-01',compliance_requirement:'GMP'},
+  {task_code:'PM-002',machine_code:'MCH-001',task_name:'Check seal temperature & calibration',frequency:'Daily',trigger_type:'Time',frequency_days:1,craft:'Operator',estimated_duration_mins:10,sop_reference:'SOP-MCH001-02',compliance_requirement:'GMP'},
+  {task_code:'PM-003',machine_code:'MCH-001',task_name:'Inspect peristaltic pump tubing for wear',frequency:'Weekly',trigger_type:'Time',frequency_days:7,craft:'Maintenance Tech',estimated_duration_mins:20,sop_reference:'SOP-MCH001-03'},
+  {task_code:'PM-004',machine_code:'MCH-001',task_name:'Lubricate cam followers & guide rails (NSF H1)',frequency:'Weekly',trigger_type:'Time',frequency_days:7,craft:'Maintenance Tech',estimated_duration_mins:20,sop_reference:'SOP-MCH001-04',nsf_h1_lubricant:true},
+  {task_code:'PM-005',machine_code:'MCH-001',task_name:'Replace peristaltic pump tubing',frequency:'Monthly',trigger_type:'Time',frequency_days:30,craft:'Maintenance Tech',estimated_duration_mins:45,sop_reference:'SOP-MCH001-05'},
+  {task_code:'PM-006',machine_code:'MCH-001',task_name:'Full OEM service (Scholle)',frequency:'Annually',trigger_type:'Time',frequency_days:365,craft:'OEM Technician',estimated_duration_mins:240,sop_reference:'OEM-SCH-SVC'},
+  {task_code:'PM-007',machine_code:'MCH-002',task_name:'Inspect & clean filling valve seats',frequency:'Daily',trigger_type:'Time',frequency_days:1,craft:'Operator',estimated_duration_mins:15,sop_reference:'SOP-MCH001-01',compliance_requirement:'GMP'},
+  {task_code:'PM-008',machine_code:'MCH-002',task_name:'Check seal temperature & calibration',frequency:'Daily',trigger_type:'Time',frequency_days:1,craft:'Operator',estimated_duration_mins:10,sop_reference:'SOP-MCH001-02',compliance_requirement:'GMP'},
+  {task_code:'PM-009',machine_code:'MCH-002',task_name:'Inspect peristaltic pump tubing for wear',frequency:'Weekly',trigger_type:'Time',frequency_days:7,craft:'Maintenance Tech',estimated_duration_mins:20,sop_reference:'SOP-MCH001-03'},
+  {task_code:'PM-010',machine_code:'MCH-002',task_name:'Lubricate cam followers & guide rails (NSF H1)',frequency:'Weekly',trigger_type:'Time',frequency_days:7,craft:'Maintenance Tech',estimated_duration_mins:20,sop_reference:'SOP-MCH001-04',nsf_h1_lubricant:true},
+  {task_code:'PM-011',machine_code:'MCH-002',task_name:'Replace peristaltic pump tubing',frequency:'Monthly',trigger_type:'Time',frequency_days:30,craft:'Maintenance Tech',estimated_duration_mins:45,sop_reference:'SOP-MCH001-05'},
+  {task_code:'PM-012',machine_code:'MCH-002',task_name:'Full OEM service (Scholle)',frequency:'Annually',trigger_type:'Time',frequency_days:365,craft:'OEM Technician',estimated_duration_mins:240,sop_reference:'OEM-SCH-SVC'},
+  {task_code:'PM-013',machine_code:'MCH-003',task_name:'Inspect indexer timing & alignment',frequency:'Daily',trigger_type:'Time',frequency_days:1,craft:'Operator',estimated_duration_mins:10,sop_reference:'SOP-MCH003-01'},
+  {task_code:'PM-014',machine_code:'MCH-003',task_name:'Lubricate servo drive & guide rails',frequency:'Weekly',trigger_type:'Time',frequency_days:7,craft:'Maintenance Tech',estimated_duration_mins:25,sop_reference:'SOP-MCH003-02',nsf_h1_lubricant:true},
+  {task_code:'PM-015',machine_code:'MCH-004',task_name:'Inspect indexer timing & alignment',frequency:'Daily',trigger_type:'Time',frequency_days:1,craft:'Operator',estimated_duration_mins:10,sop_reference:'SOP-MCH003-01'},
+  {task_code:'PM-016',machine_code:'MCH-004',task_name:'Lubricate servo drive & guide rails',frequency:'Weekly',trigger_type:'Time',frequency_days:7,craft:'Maintenance Tech',estimated_duration_mins:25,sop_reference:'SOP-MCH003-02',nsf_h1_lubricant:true},
+  {task_code:'PM-017',machine_code:'MCH-005',task_name:'Check vacuum cup integrity (erector)',frequency:'Daily',trigger_type:'Time',frequency_days:1,craft:'Operator',estimated_duration_mins:10,sop_reference:'SOP-MCH005-01'},
+  {task_code:'PM-018',machine_code:'MCH-005',task_name:'Clean conveyor belts & photoeyes',frequency:'Daily',trigger_type:'Time',frequency_days:1,craft:'Operator',estimated_duration_mins:15,sop_reference:'SOP-MCH005-02',compliance_requirement:'GMP'},
+  {task_code:'PM-019',machine_code:'MCH-006',task_name:'Check vacuum cup integrity (erector)',frequency:'Daily',trigger_type:'Time',frequency_days:1,craft:'Operator',estimated_duration_mins:10,sop_reference:'SOP-MCH005-01'},
+  {task_code:'PM-020',machine_code:'MCH-006',task_name:'Clean conveyor belts & photoeyes',frequency:'Daily',trigger_type:'Time',frequency_days:1,craft:'Operator',estimated_duration_mins:15,sop_reference:'SOP-MCH005-02',compliance_requirement:'GMP'},
+  {task_code:'PM-021',machine_code:'MCH-007',task_name:'Check glue temperature setpoint vs actual',frequency:'Daily',trigger_type:'Time',frequency_days:1,craft:'Operator',estimated_duration_mins:5,sop_reference:'SOP-MCH007-01'},
+  {task_code:'PM-022',machine_code:'MCH-007',task_name:'Clean nozzles & purge glue system',frequency:'Weekly',trigger_type:'Time',frequency_days:7,craft:'Maintenance Tech',estimated_duration_mins:30,sop_reference:'SOP-MCH007-02'},
+  {task_code:'PM-023',machine_code:'MCH-008',task_name:'Check glue temperature setpoint vs actual',frequency:'Daily',trigger_type:'Time',frequency_days:1,craft:'Operator',estimated_duration_mins:5,sop_reference:'SOP-MCH007-01'},
+  {task_code:'PM-024',machine_code:'MCH-008',task_name:'Clean nozzles & purge glue system',frequency:'Weekly',trigger_type:'Time',frequency_days:7,craft:'Maintenance Tech',estimated_duration_mins:30,sop_reference:'SOP-MCH007-02'},
+  {task_code:'PM-025',machine_code:'MCH-009',task_name:'Check print quality & registration',frequency:'Daily',trigger_type:'Time',frequency_days:1,craft:'Operator',estimated_duration_mins:5,sop_reference:'SOP-MCH009-01',compliance_requirement:'GMP / Regulatory'},
+  {task_code:'PM-026',machine_code:'MCH-009',task_name:'Clean printhead & wipe nozzle plate',frequency:'Daily',trigger_type:'Time',frequency_days:1,craft:'Operator',estimated_duration_mins:10,sop_reference:'SOP-MCH009-02'},
+  {task_code:'PM-027',machine_code:'MCH-010',task_name:'Check print quality & registration',frequency:'Daily',trigger_type:'Time',frequency_days:1,craft:'Operator',estimated_duration_mins:5,sop_reference:'SOP-MCH010-01',compliance_requirement:'GMP / Regulatory'},
+  {task_code:'PM-028',machine_code:'MCH-010',task_name:'Clean printhead & wipe nozzle plate',frequency:'Daily',trigger_type:'Time',frequency_days:1,craft:'Operator',estimated_duration_mins:10,sop_reference:'SOP-MCH010-02'},
+  {task_code:'PM-029',machine_code:'MCH-011',task_name:'Check print quality & registration',frequency:'Daily',trigger_type:'Time',frequency_days:1,craft:'Operator',estimated_duration_mins:5,sop_reference:'SOP-MCH011-01',compliance_requirement:'GMP / Regulatory'},
+  {task_code:'PM-030',machine_code:'MCH-011',task_name:'Clean printhead & wipe nozzle plate',frequency:'Daily',trigger_type:'Time',frequency_days:1,craft:'Operator',estimated_duration_mins:10,sop_reference:'SOP-MCH011-02'},
+  {task_code:'PM-031',machine_code:'MCH-012',task_name:'Check print quality & registration',frequency:'Daily',trigger_type:'Time',frequency_days:1,craft:'Operator',estimated_duration_mins:5,sop_reference:'SOP-MCH012-01',compliance_requirement:'GMP / Regulatory'},
+  {task_code:'PM-032',machine_code:'MCH-012',task_name:'Clean printhead & wipe nozzle plate',frequency:'Daily',trigger_type:'Time',frequency_days:1,craft:'Operator',estimated_duration_mins:10,sop_reference:'SOP-MCH012-02'},
+  {task_code:'PM-033',machine_code:'MCH-013',task_name:'Check print quality & registration',frequency:'Daily',trigger_type:'Time',frequency_days:1,craft:'Operator',estimated_duration_mins:5,sop_reference:'SOP-MCH013-01',compliance_requirement:'GMP / Regulatory'},
+  {task_code:'PM-034',machine_code:'MCH-013',task_name:'Clean printhead & wipe nozzle plate',frequency:'Daily',trigger_type:'Time',frequency_days:1,craft:'Operator',estimated_duration_mins:10,sop_reference:'SOP-MCH013-02'},
+  {task_code:'PM-035',machine_code:'MCH-014',task_name:'Check carton pick suction cups',frequency:'Daily',trigger_type:'Time',frequency_days:1,craft:'Operator',estimated_duration_mins:10,sop_reference:'SOP-MCH014-01'},
+  {task_code:'PM-036',machine_code:'MCH-014',task_name:'Lubricate cam drive & folding ploughs',frequency:'Weekly',trigger_type:'Time',frequency_days:7,craft:'Maintenance Tech',estimated_duration_mins:30,sop_reference:'SOP-MCH014-02',nsf_h1_lubricant:true},
+  {task_code:'PM-037',machine_code:'MCH-015',task_name:'Check elevator belt tension & tracking',frequency:'Daily',trigger_type:'Time',frequency_days:1,craft:'Operator',estimated_duration_mins:10,sop_reference:'SOP-MCH015-01'},
+  {task_code:'PM-038',machine_code:'MCH-015',task_name:'Inspect bottle guide rails for wear',frequency:'Weekly',trigger_type:'Time',frequency_days:7,craft:'Maintenance Tech',estimated_duration_mins:15,sop_reference:'SOP-MCH015-02'},
+  {task_code:'PM-039',machine_code:'MCH-016',task_name:'Inspect rotary union for leaks',frequency:'Daily',trigger_type:'Time',frequency_days:1,craft:'Operator',estimated_duration_mins:5,sop_reference:'SOP-MCH016-01'},
+  {task_code:'PM-040',machine_code:'MCH-016',task_name:'Clean & flush rinse nozzles',frequency:'Daily',trigger_type:'Time',frequency_days:1,craft:'Operator',estimated_duration_mins:15,sop_reference:'SOP-MCH016-02',compliance_requirement:'GMP'},
+  {task_code:'PM-041',machine_code:'MCH-017',task_name:'Check label web tension & alignment',frequency:'Daily',trigger_type:'Time',frequency_days:1,craft:'Operator',estimated_duration_mins:10,sop_reference:'SOP-MCH017-01'},
+  {task_code:'PM-042',machine_code:'MCH-017',task_name:'Clean label applicator head & drive rollers',frequency:'Weekly',trigger_type:'Time',frequency_days:7,craft:'Maintenance Tech',estimated_duration_mins:20,sop_reference:'SOP-MCH017-02'},
+  {task_code:'PM-043',machine_code:'MCH-018',task_name:'Check tunnel temperature vs setpoint',frequency:'Daily',trigger_type:'Time',frequency_days:1,craft:'Operator',estimated_duration_mins:5,sop_reference:'SOP-MCH018-01'},
+  {task_code:'PM-044',machine_code:'MCH-018',task_name:'Clean conveyor belt & debris tray',frequency:'Daily',trigger_type:'Time',frequency_days:1,craft:'Operator',estimated_duration_mins:15,sop_reference:'SOP-MCH018-02'},
+  {task_code:'PM-045',machine_code:'MCH-018',task_name:'Inspect heating elements & air flow fans',frequency:'Monthly',trigger_type:'Time',frequency_days:30,craft:'Maintenance Tech',estimated_duration_mins:30,sop_reference:'SOP-MCH018-03'},
+  {task_code:'PM-046',machine_code:'MCH-019',task_name:'Inspect rotary union for leaks',frequency:'Daily',trigger_type:'Time',frequency_days:1,craft:'Operator',estimated_duration_mins:5,sop_reference:'SOP-MCH019-01'},
+  {task_code:'PM-047',machine_code:'MCH-019',task_name:'Clean & flush rinse nozzles',frequency:'Daily',trigger_type:'Time',frequency_days:1,craft:'Operator',estimated_duration_mins:15,sop_reference:'SOP-MCH019-02',compliance_requirement:'GMP'},
+  {task_code:'PM-048',machine_code:'MCH-020',task_name:'Inspect filling valves & seals',frequency:'Daily',trigger_type:'Time',frequency_days:1,craft:'Operator',estimated_duration_mins:10,sop_reference:'SOP-MCH020-01',compliance_requirement:'GMP'},
+  {task_code:'PM-049',machine_code:'MCH-020',task_name:'Lubricate drive chain & pivot bearings',frequency:'Weekly',trigger_type:'Time',frequency_days:7,craft:'Maintenance Tech',estimated_duration_mins:20,sop_reference:'SOP-MCH020-02',nsf_h1_lubricant:true},
+  {task_code:'PM-050',machine_code:'MCH-021',task_name:'Check case erector vacuum cups & belts',frequency:'Daily',trigger_type:'Time',frequency_days:1,craft:'Operator',estimated_duration_mins:10,sop_reference:'SOP-MCH021-01'},
+  {task_code:'PM-051',machine_code:'MCH-022',task_name:'Check oil level & pressure relief valve',frequency:'Daily',trigger_type:'Time',frequency_days:1,craft:'Operator',estimated_duration_mins:5,sop_reference:'SOP-MCH022-01'},
+  {task_code:'PM-052',machine_code:'MCH-022',task_name:'Drain condensate trap & inspect air filter',frequency:'Weekly',trigger_type:'Time',frequency_days:7,craft:'Maintenance Tech',estimated_duration_mins:15,sop_reference:'SOP-MCH022-02'},
+  {task_code:'PM-053',machine_code:'MCH-022',task_name:'Change oil filter element',frequency:'Monthly',trigger_type:'Time',frequency_days:30,craft:'Maintenance Tech',estimated_duration_mins:30,sop_reference:'SOP-MCH022-03'},
+];
+
+async function importPMTasks(){
+  const btn=$('import-pm-btn');btn.disabled=true;btn.innerHTML='<div class="spinner"></div> Importing…';
+  let ok=0,skip=0;
+  for(const t of PM_SEED){
+    const m=state.machines.find(x=>x.machine_code===t.machine_code);if(!m){skip++;continue;}
+    const {error}=await sb.from('pm_tasks').upsert({task_code:t.task_code,machine_id:m.id,task_name:t.task_name,frequency:t.frequency,trigger_type:t.trigger_type,frequency_days:t.frequency_days,craft:t.craft,estimated_duration_mins:t.estimated_duration_mins,sop_reference:t.sop_reference,compliance_requirement:t.compliance_requirement||null,nsf_h1_lubricant:t.nsf_h1_lubricant||false,is_statutory:false},{onConflict:'task_code',ignoreDuplicates:true});
+    if(error)skip++;else ok++;
+  }
+  const fresh=await sb.from('pm_tasks').select('*').order('task_code');
+  state.pmTasks=fresh.data||[];
+  showToast(`Imported ${ok} preventive tasks. ${skip} skipped.`);
+  btn.disabled=false;btn.textContent='Import Preventive Tasks';renderSetup();
+}
+
+const PARTS_SEED=[
+  {part_code:'SP-001',name:'Scholle Filling Valve Assembly',machine_code:'MCH-001',criticality:'Critical',min_qty:1,max_qty:2,current_qty:1,bin_location:'SH-A-01'},
+  {part_code:'SP-002',name:'Peristaltic Pump Tubing (Scholle)',machine_code:'MCH-001',criticality:'High',min_qty:4,max_qty:10,current_qty:6,bin_location:'SH-A-03',is_consumable:true},
+  {part_code:'SP-003',name:'Scholle Film Seal Head',machine_code:'MCH-001',criticality:'Critical',min_qty:1,max_qty:2,current_qty:1,bin_location:'SH-A-02'},
+  {part_code:'SP-004',name:'HMPS Indexer Drive Belt',machine_code:'MCH-003',criticality:'High',min_qty:2,max_qty:4,current_qty:2,bin_location:'SH-B-01'},
+  {part_code:'SP-005',name:'Servo Motor (HMPS index)',machine_code:'MCH-003',criticality:'Critical',min_qty:1,max_qty:1,current_qty:0,bin_location:'SH-B-02'},
+  {part_code:'SP-006',name:'Recopak Vacuum Cups',machine_code:'MCH-005',criticality:'Medium',min_qty:10,max_qty:20,current_qty:12,bin_location:'SH-C-01',is_consumable:true},
+  {part_code:'SP-007',name:'Nordson Glue Gun Nozzle',machine_code:'MCH-007',criticality:'Medium',min_qty:4,max_qty:8,current_qty:5,bin_location:'SH-D-01',is_consumable:true},
+  {part_code:'SP-008',name:'Videojet Printhead Assembly',machine_code:'MCH-009',criticality:'Critical',min_qty:1,max_qty:2,current_qty:1,bin_location:'SH-E-01'},
+  {part_code:'SP-009',name:'Videojet Ink Cartridge (bulk)',machine_code:'MCH-009',criticality:'High',min_qty:2,max_qty:6,current_qty:3,bin_location:'SH-E-02',is_consumable:true},
+  {part_code:'SP-010',name:'HMPS Carton Suction Cups',machine_code:'MCH-014',criticality:'Medium',min_qty:8,max_qty:16,current_qty:8,bin_location:'SH-F-01',is_consumable:true},
+  {part_code:'SP-011',name:'Splat Rinser Spray Nozzles',machine_code:'MCH-016',criticality:'Medium',min_qty:4,max_qty:10,current_qty:6,bin_location:'SH-H-01',is_consumable:true},
+  {part_code:'SP-012',name:'Herma Label Applicator Head',machine_code:'MCH-017',criticality:'Critical',min_qty:1,max_qty:1,current_qty:1,bin_location:'SH-I-01'},
+  {part_code:'SP-013',name:'Shrink Tunnel Heating Element',machine_code:'MCH-018',criticality:'High',min_qty:2,max_qty:4,current_qty:2,bin_location:'SH-J-01'},
+  {part_code:'SP-014',name:'2L Filling Valve Block',machine_code:'MCH-020',criticality:'Critical',min_qty:1,max_qty:1,current_qty:1,bin_location:'SH-K-01'},
+  {part_code:'SP-015',name:'Atlas Copco Oil Filter Element',machine_code:'MCH-022',criticality:'High',min_qty:2,max_qty:4,current_qty:3,bin_location:'SH-L-01',is_consumable:true},
+  {part_code:'SP-016',name:'Atlas Copco Safety Relief Valve',machine_code:'MCH-022',criticality:'Critical',min_qty:1,max_qty:1,current_qty:1,bin_location:'SH-L-03'},
+  {part_code:'SP-017',name:'Food Grade Grease NSF H1 (cartridge)',machine_code:null,criticality:'Medium',min_qty:4,max_qty:12,current_qty:7,bin_location:'SH-Q-02',is_consumable:true,nsf_h1_certified:true},
+  {part_code:'SP-018',name:'O-Ring Kit Viton (assorted)',machine_code:null,criticality:'High',min_qty:1,max_qty:3,current_qty:2,bin_location:'SH-Q-01'},
+];
+
+async function importParts(){
+  const btn=$('import-parts-btn');btn.disabled=true;btn.innerHTML='<div class="spinner"></div> Importing…';
+  let ok=0,skip=0;
+  for(const p of PARTS_SEED){
+    const m=p.machine_code?state.machines.find(x=>x.machine_code===p.machine_code):null;
+    const {error}=await sb.from('spare_parts').upsert({part_code:p.part_code,machine_id:m?.id||null,name:p.name,criticality:p.criticality,min_qty:p.min_qty,max_qty:p.max_qty,current_qty:p.current_qty,bin_location:p.bin_location,is_consumable:p.is_consumable||false,nsf_h1_certified:p.nsf_h1_certified||false},{onConflict:'part_code',ignoreDuplicates:true});
+    if(error)skip++;else ok++;
+  }
+  const fresh=await sb.from('spare_parts').select('*').order('part_code');
+  state.spareParts=fresh.data||[];
+  state.stockAlerts=state.spareParts.filter(p=>p.current_qty<=p.min_qty).length;
+  showToast(`Imported ${ok} parts. ${skip} skipped.`);
+  btn.disabled=false;btn.textContent='Import Spare Parts';renderNav();renderSetup();
+}
+
+const STATUTORY_SEED=[
+  {requirement_name:'Pressure Vessel Inspection — Compressor',regulation:'AS/NZS 3788',responsible_party:'OEM / Licensed Inspector',frequency_months:12,next_due_date:'2026-06-01',machine_code:'MCH-022'},
+  {requirement_name:'Safety Relief Valve Test — Compressor',regulation:'AS 1271',responsible_party:'Maintenance Tech',frequency_months:6,next_due_date:'2026-04-01',machine_code:'MCH-022'},
+  {requirement_name:'Electrical Safety Inspection (AS/NZS 3000)',regulation:'AS/NZS 3000',responsible_party:'Licensed Electrician',frequency_months:12,next_due_date:'2026-09-01',machine_code:null},
+  {requirement_name:'Trade Measurement Verification — Fillers',regulation:'NMI M 10',responsible_party:'Trade Measurement Inspector',frequency_months:24,next_due_date:'2027-01-01',machine_code:null},
+  {requirement_name:'Boiler & Pressure Equipment Registration Renewal',regulation:'AS 4343',responsible_party:'Site Manager',frequency_months:36,next_due_date:'2027-06-01',machine_code:'MCH-022'},
+  {requirement_name:'GMP Internal Audit — Filling Lines',regulation:'FSANZ / SQF',responsible_party:'QA Manager',frequency_months:6,next_due_date:'2026-05-01',machine_code:null},
+  {requirement_name:'Emergency Stop & Safety Circuit Test',regulation:'AS 4024',responsible_party:'Maintenance Tech',frequency_months:12,next_due_date:'2026-07-01',machine_code:null},
+  {requirement_name:'Fire Suppression System Inspection',regulation:'AS 1851',responsible_party:'Licensed Inspector',frequency_months:6,next_due_date:'2026-04-15',machine_code:null},
+  {requirement_name:'NSF H1 Lubricant Register Review',regulation:'NSF / 3-A',responsible_party:'QA Manager',frequency_months:12,next_due_date:'2026-08-01',machine_code:null},
+  {requirement_name:'Manual Handling Risk Assessment Review',regulation:'WHS Act 2011',responsible_party:'Site Manager',frequency_months:12,next_due_date:'2026-10-01',machine_code:null},
+];
+
+async function importStatutory(){
+  const btn=$('import-stat-btn');btn.disabled=true;btn.innerHTML='<div class="spinner"></div> Importing…';
+  let ok=0,skip=0;
+  for(const r of STATUTORY_SEED){
+    const m=r.machine_code?state.machines.find(x=>x.machine_code===r.machine_code):null;
+    const {error}=await sb.from('statutory_requirements').insert({machine_id:m?.id||null,requirement_name:r.requirement_name,regulation:r.regulation,responsible_party:r.responsible_party,frequency_months:r.frequency_months,next_due_date:r.next_due_date,is_active:true});
+    if(error)skip++;else ok++;
+  }
+  const fresh=await sb.from('statutory_requirements').select('*').eq('is_active',true).order('next_due_date');
+  state.statutory=fresh.data||[];
+  showToast(`Imported ${ok} statutory items. ${skip} skipped.`);
+  btn.disabled=false;btn.textContent='Import Statutory & Compliance';renderSetup();
+}
+
+async function clearWorkOrders(){
+  await sb.from('work_orders').delete().neq('id','00000000-0000-0000-0000-000000000000');
+  state.workOrders=[];state.openBreakdowns=0;
+  showToast('Work orders cleared.');renderNav();renderSetup();
+}
+
+// ── MACHINE MODAL ─────────────────────────────────────────
+let machineForm={id:null,machine_code:'',name:'',category:'',site_id:'',oem_manufacturer:'',location_zone:'',criticality:'High',status:'Active',serial_number:'',year_installed:'',notes:''};
+
+function openMachineModal(machineId){
+  if(machineId){const m=state.machines.find(x=>x.id===machineId);if(m)machineForm={id:m.id,machine_code:m.machine_code,name:m.name,category:m.category||'',site_id:m.site_id||'',oem_manufacturer:m.oem_manufacturer||'',location_zone:m.location_zone||'',criticality:m.criticality||'High',status:m.status||'Active',serial_number:m.serial_number||'',year_installed:m.year_installed||'',notes:m.notes||''};}
+  else machineForm={id:null,machine_code:'',name:'',category:'',site_id:'',oem_manufacturer:'',location_zone:'',criticality:'High',status:'Active',serial_number:'',year_installed:'',notes:''};
+  const modal=$('machine-modal');modal.style.display='flex';modal.className='modal-overlay';
+  modal.innerHTML=`<div class="modal">
+    <div class="modal-hdr"><div class="modal-title">${machineForm.id?'Edit Machine':'Add Machine'}</div><button class="btn btn-ghost btn-sm" onclick="closeMachineModal()">&#x2715;</button></div>
+    <div class="form-grid">
+      <div class="fg"><label>Machine Code *</label><input value="${esc(machineForm.machine_code)}" onchange="machineForm.machine_code=this.value" placeholder="MCH-023"></div>
+      <div class="fg"><label>Name *</label><input value="${esc(machineForm.name)}" onchange="machineForm.name=this.value" placeholder="Machine name"></div>
+      <div class="fg"><label>Site *</label><select onchange="machineForm.site_id=this.value"><option value="">— Select site —</option>${state.sites.map(s=>`<option value="${s.id}"${machineForm.site_id===s.id?' selected':''}>${esc(s.name)}</option>`).join('')}</select></div>
+      <div class="fg"><label>Category</label><select onchange="machineForm.category=this.value">${['','Filling','Packaging','Coding','Labelling','Carton Erecting','Bottle Handling','Rinsing','Utilities','Other'].map(c=>`<option${machineForm.category===c?' selected':''}>${c}</option>`).join('')}</select></div>
+      <div class="fg full"><label>OEM / Manufacturer</label><input value="${esc(machineForm.oem_manufacturer)}" onchange="machineForm.oem_manufacturer=this.value" placeholder="e.g. Scholle Packaging"></div>
+      <div class="fg"><label>Location Zone</label><input value="${esc(machineForm.location_zone)}" onchange="machineForm.location_zone=this.value" placeholder="e.g. Line A"></div>
+      <div class="fg"><label>Criticality</label><select onchange="machineForm.criticality=this.value">${['Critical','High','Medium','Low'].map(c=>`<option${machineForm.criticality===c?' selected':''}>${c}</option>`).join('')}</select></div>
+      <div class="fg"><label>Status</label><select onchange="machineForm.status=this.value">${['Active','Under Repair','Awaiting Parts','Inactive','Decommissioned'].map(s=>`<option${machineForm.status===s?' selected':''}>${s}</option>`).join('')}</select></div>
+      <div class="fg"><label>Serial Number</label><input value="${esc(machineForm.serial_number)}" onchange="machineForm.serial_number=this.value" placeholder="Optional"></div>
+      <div class="fg"><label>Year Installed</label><input type="number" value="${esc(machineForm.year_installed)}" onchange="machineForm.year_installed=this.value" placeholder="e.g. 2019"></div>
+      <div class="fg full"><label>Notes</label><textarea onchange="machineForm.notes=this.value" placeholder="Any additional information…">${esc(machineForm.notes)}</textarea></div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-ghost" onclick="closeMachineModal()">Cancel</button><button class="btn btn-primary" onclick="saveMachine()" id="save-machine-btn">${machineForm.id?'Save Changes':'Add Machine'}</button></div>
+  </div>`;
+}
+
+function closeMachineModal(){ $('machine-modal').style.display='none';$('machine-modal').innerHTML=''; }
+
+async function saveMachine(){
+  if(!machineForm.name||!machineForm.machine_code||!machineForm.site_id){showToast('Machine code, name and site are required.','error');return;}
+  const btn=$('save-machine-btn');btn.disabled=true;btn.innerHTML='<div class="spinner"></div> Saving…';
+  const payload={machine_code:machineForm.machine_code.trim(),name:machineForm.name.trim(),category:machineForm.category||null,site_id:machineForm.site_id,oem_manufacturer:machineForm.oem_manufacturer||null,location_zone:machineForm.location_zone||null,criticality:machineForm.criticality,status:machineForm.status,serial_number:machineForm.serial_number||null,year_installed:machineForm.year_installed?parseInt(machineForm.year_installed):null,notes:machineForm.notes||null,is_active:true};
+  let error;
+  if(machineForm.id){({error}=await sb.from('machines').update(payload).eq('id',machineForm.id));if(!error){const idx=state.machines.findIndex(m=>m.id===machineForm.id);if(idx>-1)state.machines[idx]={...state.machines[idx],...payload};showToast('Machine updated.');}}
+  else{const {data,error:err}=await sb.from('machines').insert(payload).select().single();error=err;if(!error&&data){state.machines.push(data);selectedMachine=data;showToast(`Machine ${data.machine_code} added.`);}}
+  if(error){showToast('Error: '+error.message,'error');btn.disabled=false;btn.textContent='Save';return;}
+  closeMachineModal();renderMachines();
+}
+
+// ── INIT ───────────────────────────────────────────────────
+initDate();
+renderNav();
+loadAll();
+</script>
+</body>
+</html>
