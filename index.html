@@ -393,7 +393,7 @@ async function loadAll(){
       .select('*').gte('completed_at',todayStart.toISOString());
     pmCompletions={};
     (todayComps||[]).forEach(c=>{
-      pmCompletions[c.pm_task_id]={staffName:c.completed_by,time:new Date(c.completed_at),dbId:c.id};
+      pmCompletions[c.pm_task_id]={staffName:c.completed_by,time:new Date(c.completed_at),dbId:c.id,notes:c.notes||''};
     });
     state.loaded=true;
     $('conn-dot').classList.remove('err');
@@ -558,7 +558,10 @@ function renderPMSchedule(){
               </select>
             </div>
             <div class="pm-td" id="stamp-${t.id}">
-              ${c?`<div class="pm-stamp">&#10003; ${esc(c.staffName)}<br><span style="font-weight:400;opacity:.7">${fmtTime(c.time)}</span></div>`:''}
+              ${c
+                ?`<div class="pm-stamp">&#10003; ${esc(c.staffName)}<br><span style="font-weight:400;opacity:.7">${fmtTime(c.time)}</span>${c.notes?`<br><span style="font-weight:400;font-style:italic;opacity:.7;font-size:10px">${esc(c.notes)}</span>`:''}</div>`
+                :`<input type="text" id="notes-${t.id}" placeholder="Observations (optional)" style="width:100%;font-size:11px;padding:4px 6px;margin-top:4px;background:var(--surface2);border:1px solid var(--border);border-radius:4px;color:var(--text)" maxlength="300">`
+              }
             </div>
           </div>`;
         }).join('')}
@@ -654,43 +657,34 @@ async function togglePMComplete(taskId,type,checkbox){
       showToast('Please select a staff member before marking complete.','error');
       return;
     }
+    // Grab optional notes from input field
+    const notesEl=$(`notes-${taskId}`);
+    const notes=notesEl?.value?.trim()||'';
     const task=state.pmTasks.find(t=>t.id===taskId);
     const now=new Date();
-    // Save to Supabase
     const {data:saved,error}=await sb.from('pm_completions').insert({
       pm_task_id:taskId,
       machine_id:task?.machine_id||null,
       completed_by:staffName,
       completed_at:now.toISOString(),
+      notes:notes||null,
     }).select().single();
     if(error){showToast('Could not save completion: '+error.message,'error');checkbox.checked=false;return;}
-    pmCompletions[taskId]={staffName,time:now,dbId:saved.id};
-    // Update row in-place without full re-render
+    pmCompletions[taskId]={staffName,time:now,dbId:saved.id,notes};
     const row=$(`row-${taskId}`);
     if(row){
       row.classList.add('done');
       const stamp=$(`stamp-${taskId}`);
-      if(stamp)stamp.innerHTML=`<div class="pm-stamp">&#10003; ${esc(staffName)}<br><span style="font-weight:400;opacity:.7">${fmtTime(now)}</span></div>`;
+      if(stamp)stamp.innerHTML=`<div class="pm-stamp">&#10003; ${esc(staffName)}<br><span style="font-weight:400;opacity:.7">${fmtTime(now)}</span>${notes?`<br><span style="font-weight:400;font-style:italic;opacity:.7;font-size:10px">${esc(notes)}</span>`:''}</div>`;
       if(sel){sel.disabled=true;}
       updatePMProgress(type);
     }
     showToast('Task marked complete.');
   } else {
-    const existing=pmCompletions[taskId];
-    if(existing?.dbId){
-      const {error}=await sb.from('pm_completions').delete().eq('id',existing.dbId);
-      if(error){showToast('Could not remove completion: '+error.message,'error');checkbox.checked=true;return;}
-    }
-    delete pmCompletions[taskId];
-    const row=$(`row-${taskId}`);
-    if(row){
-      row.classList.remove('done');
-      const stamp=$(`stamp-${taskId}`);
-      if(stamp)stamp.innerHTML='';
-      const sel=$(`staff-${taskId}`);
-      if(sel){sel.disabled=false;}
-      updatePMProgress(type);
-    }
+    // APPEND-ONLY: completions cannot be deleted — they are part of the audit trail.
+    // Show a clear message and reset the checkbox.
+    checkbox.checked=true;
+    showToast('Completions cannot be removed — they are part of the audit trail. Contact your supervisor if this was logged in error.','error');
   }
 }
 
@@ -1117,13 +1111,51 @@ function renderMachinePanel(){
   const tasks=state.pmTasks.filter(t=>t.machine_id===m.id);
   const parts=state.spareParts.filter(p=>p.machine_id===m.id);
   const wos=state.workOrders.filter(w=>w.machine_id===m.id).slice(0,10);
-  const tabs=['tasks','parts','history'];
-  const tabLabels={tasks:`Prev. Tasks (${tasks.length})`,parts:`Parts (${parts.length})`,history:`WOs (${wos.length})`};
+  const tabs=['tasks','parts','history','downtime'];
+  const breakdowns=state.workOrders.filter(w=>w.machine_id===m.id&&w.wo_type==='Breakdown');
+  const tabLabels={tasks:`Prev. Tasks (${tasks.length})`,parts:`Parts (${parts.length})`,history:`WOs (${wos.length})`,downtime:'Downtime'};
   let body='';
   if(machineTab==='tasks'){
     body=tasks.length?`<table class="tbl"><thead><tr><th>Task</th><th>Freq</th><th>Craft</th><th>Est.</th></tr></thead><tbody>${tasks.map(t=>`<tr><td><div style="font-weight:500;font-size:12px">${esc(t.task_name)}</div><div style="font-size:10px;color:var(--muted)">${esc(t.sop_reference||'')}</div></td><td><span class="badge" style="background:rgba(255,255,255,.07);color:var(--muted)">${t.frequency}</span></td><td style="font-size:11px;color:var(--muted)">${esc(t.craft||'')}</td><td style="font-size:11px;color:var(--muted)">${t.estimated_duration_mins?t.estimated_duration_mins+'m':'—'}</td></tr>`).join('')}</tbody></table>`:'<div class="empty">No preventive tasks configured.</div>';
   } else if(machineTab==='parts'){
     body=parts.length?parts.map(p=>`<div style="padding:10px 0;border-bottom:1px solid var(--border)"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span style="font-weight:500;font-size:13px">${esc(p.name)}</span>${stockBadge(p)}</div><div style="font-size:11px;color:var(--muted);margin-top:3px">Bin: ${esc(p.bin_location||'—')} · Qty: ${p.current_qty} / min ${p.min_qty}</div></div>`).join(''):'<div class="empty">No spare parts linked.</div>';
+  } else if(machineTab==='downtime'){
+    // Downtime summary — 3 ranges
+    function downtimeSummary(days){
+      const cutoff=new Date();cutoff.setDate(cutoff.getDate()-days);
+      const bds=breakdowns.filter(w=>new Date(w.date_raised)>=cutoff);
+      const hrs=bds.reduce((s,w)=>s+(parseFloat(w.downtime_hours)||0),0);
+      const repairHrs=bds.reduce((s,w)=>s+(parseFloat(w.actual_hours)||0),0);
+      return{count:bds.length,hrs:Math.round(hrs*10)/10,repairHrs:Math.round(repairHrs*10)/10};
+    }
+    const d30=downtimeSummary(30),d90=downtimeSummary(90),d365=downtimeSummary(365);
+    // Failure mode breakdown from structured field
+    const fmCounts={};
+    breakdowns.forEach(w=>{if(w.failure_mode){fmCounts[w.failure_mode]=(fmCounts[w.failure_mode]||0)+1;}});
+    const fmSorted=Object.entries(fmCounts).sort((a,b)=>b[1]-a[1]).slice(0,5);
+    const fcCounts={};
+    breakdowns.forEach(w=>{if(w.failure_component){fcCounts[w.failure_component]=(fcCounts[w.failure_component]||0)+1;}});
+    const fcSorted=Object.entries(fcCounts).sort((a,b)=>b[1]-a[1]).slice(0,5);
+    body=`
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px">
+        ${[['30 days',d30],['90 days',d90],['12 months',d365]].map(([label,d])=>`
+          <div style="background:var(--surface2);border-radius:6px;padding:10px;text-align:center">
+            <div style="font-size:10px;color:var(--muted);font-family:var(--fd);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">${label}</div>
+            <div style="font-family:var(--fd);font-size:22px;font-weight:800;color:${d.count>0?'var(--orange)':'var(--green)'}">${d.count}</div>
+            <div style="font-size:10px;color:var(--muted)">breakdown${d.count!==1?'s':''}</div>
+            <div style="font-size:11px;color:var(--muted);margin-top:4px">${d.hrs} hrs downtime</div>
+          </div>`).join('')}
+      </div>
+      ${fmSorted.length?`
+        <div style="font-family:var(--fd);font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-bottom:6px">Top Failure Modes</div>
+        ${fmSorted.map(([mode,count])=>`<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--border);font-size:12px"><span>${esc(mode)}</span><span style="font-weight:700;color:var(--orange)">${count}</span></div>`).join('')}
+      `:''}
+      ${fcSorted.length?`
+        <div style="font-family:var(--fd);font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin:10px 0 6px">Top Failed Components</div>
+        ${fcSorted.map(([comp,count])=>`<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--border);font-size:12px"><span>${esc(comp)}</span><span style="font-weight:700;color:var(--red)">${count}</span></div>`).join('')}
+      `:''}
+      ${!breakdowns.length?'<div class="empty" style="margin-top:12px">No breakdown history for this machine.</div>':''}
+    `;
   } else {
     body=wos.length?wos.map(w=>`<div style="padding:10px 0;border-bottom:1px solid var(--border)"><div style="display:flex;justify-content:space-between;margin-bottom:2px"><span style="font-family:monospace;font-size:11px;color:var(--accent)">${esc(w.wo_number)}</span><span style="font-size:11px;color:var(--muted)">${fmtDate(w.date_raised)}</span></div><div style="font-size:13px;font-weight:500;margin-bottom:3px">${esc(w.title)}</div><div style="display:flex;gap:6px">${woBadge(w.wo_type)}${woStatusBadge(w.status)}</div></div>`).join(''):'<div class="empty">No work orders.</div>';
   }
@@ -1176,7 +1208,7 @@ async function submitPM(){
 // ══════════════════════════════════════════════════════════
 // BREAKDOWN
 // ══════════════════════════════════════════════════════════
-let bdForm={machineId:'',priority:'High',desc:'',tech:'',duration:'',downtime:'',rootCause:'',action:'',date:todayStr(),isSafety:false};
+let bdForm={machineId:'',priority:'High',desc:'',tech:'',duration:'',downtime:'',rootCause:'',action:'',date:todayStr(),isSafety:false,failureMode:'',failureComponent:''};
 
 function renderBreakdown(){
   $('content').innerHTML=`<div style="max-width:600px"><div class="card" style="border-color:rgba(239,68,68,.35)">
@@ -1193,7 +1225,19 @@ function renderBreakdown(){
       <div class="fg"><label>Safety Related?</label><select onchange="bdForm.isSafety=this.value==='Yes'"><option${!bdForm.isSafety?' selected':''}>No</option><option${bdForm.isSafety?' selected':''}>Yes</option></select></div>
       <div class="fg"><label>Repair Duration (hrs)</label><input type="number" step="0.25" value="${bdForm.duration}" onchange="bdForm.duration=this.value" placeholder="e.g. 2.0"></div>
       <div class="fg"><label>Downtime (hrs)</label><input type="number" step="0.25" value="${bdForm.downtime}" onchange="bdForm.downtime=this.value" placeholder="e.g. 1.5"></div>
-      <div class="fg full"><label>Root Cause</label><input value="${esc(bdForm.rootCause)}" onchange="bdForm.rootCause=this.value" placeholder="e.g. Seal wear, component age…"></div>
+      <div class="fg"><label>Failure Mode</label>
+        <select onchange="bdForm.failureMode=this.value">
+          <option value="">— Select if known —</option>
+          ${['Mechanical wear','Seal/gasket failure','Bearing failure','Belt/chain failure','Electrical fault','Sensor failure','Valve failure','Pump failure','Blockage/jam','Contamination','Operator error','Software/control fault','Structural failure','Unknown'].map(m=>`<option value="${m}"${bdForm.failureMode===m?' selected':''}>${m}</option>`).join('')}
+        </select>
+      </div>
+      <div class="fg"><label>Failed Component</label>
+        <select onchange="bdForm.failureComponent=this.value">
+          <option value="">— Select if known —</option>
+          ${['Filler valve','Capper head','Bladder','Conveyor belt','Drive belt','Bearing','Seal/O-ring','Sensor','Pump','Motor','Solenoid valve','PLC/control board','Carton erector','Indexer','Star wheel','Shrink tunnel element','Coder printhead','Gearbox','Cylinder/actuator','Other'].map(c=>`<option value="${c}"${bdForm.failureComponent===c?' selected':''}>${c}</option>`).join('')}
+        </select>
+      </div>
+      <div class="fg full"><label>Root Cause</label><input value="${esc(bdForm.rootCause)}" onchange="bdForm.rootCause=this.value" placeholder="e.g. Seal wear, component age, lack of lubrication…"></div>
       <div class="fg full"><label>Corrective Action Taken</label><textarea onchange="bdForm.action=this.value" placeholder="What was done to restore operation…">${esc(bdForm.action)}</textarea></div>
     </div>
     <div style="margin-top:16px"><button class="btn btn-danger" onclick="submitBreakdown()" id="bd-btn">Raise Work Order</button></div>
@@ -1203,12 +1247,12 @@ function renderBreakdown(){
 async function submitBreakdown(){
   if(!bdForm.machineId||!bdForm.desc||!bdForm.tech){showToast('Machine, description and technician required.','error');return;}
   const btn=$('bd-btn');btn.disabled=true;btn.innerHTML='<div class="spinner"></div> Saving…';
-  const {data,error}=await sb.from('work_orders').insert({machine_id:bdForm.machineId,wo_type:'Breakdown',status:'Open',priority:bdForm.priority,title:bdForm.desc.slice(0,200),description:bdForm.desc,root_cause:bdForm.rootCause||null,corrective_action:bdForm.action||null,date_raised:bdForm.date,actual_hours:parseFloat(bdForm.duration)||null,downtime_hours:parseFloat(bdForm.downtime)||0,is_safety_related:bdForm.isSafety,wo_number:''}).select().single();
+  const {data,error}=await sb.from('work_orders').insert({machine_id:bdForm.machineId,wo_type:'Breakdown',status:'Open',priority:bdForm.priority,title:bdForm.desc.slice(0,200),description:bdForm.desc,root_cause:bdForm.rootCause||null,corrective_action:bdForm.action||null,failure_mode:bdForm.failureMode||null,failure_component:bdForm.failureComponent||null,date_raised:bdForm.date,actual_hours:parseFloat(bdForm.duration)||null,downtime_hours:parseFloat(bdForm.downtime)||0,is_safety_related:bdForm.isSafety,wo_number:''}).select().single();
   if(error){showToast('Error: '+error.message,'error');btn.disabled=false;btn.textContent='Raise Work Order';return;}
   await sb.from('alerts').insert({alert_type:'Breakdown Raised',machine_id:bdForm.machineId,work_order_id:data.id,title:`Breakdown: ${getMachine(bdForm.machineId)?.name}`,message:bdForm.desc.slice(0,300),priority:bdForm.priority,status:'Active'});
   state.workOrders.unshift(data);state.openBreakdowns++;
   showToast(`Breakdown ${data.wo_number} raised.`);
-  bdForm={machineId:'',priority:'High',desc:'',tech:'',duration:'',downtime:'',rootCause:'',action:'',date:todayStr(),isSafety:false};
+  bdForm={machineId:'',priority:'High',desc:'',tech:'',duration:'',downtime:'',rootCause:'',action:'',date:todayStr(),isSafety:false,failureMode:'',failureComponent:''};
   renderNav();renderBreakdown();
 }
 
