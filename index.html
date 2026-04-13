@@ -239,7 +239,7 @@ select option{background:var(--surface2)}
 <body>
 <div id="app">
   <div class="sidebar" id="sidebar">
-    <div class="logo">
+    <div class="logo" onclick="navigate('dashboard')" title="Back to Dashboard" style="cursor:pointer;">
       <div class="logo-img">
         <div class="logo-badge">ABH</div>
         <div class="logo-name">MAINTENANCE</div>
@@ -259,7 +259,7 @@ select option{background:var(--surface2)}
         <button class="menu-btn" onclick="toggleSidebar()">
           <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
         </button>
-        <div>
+        <div onclick="navigate('dashboard')" title="Back to Dashboard" style="cursor:pointer;">
           <div class="topbar-title" id="page-title">Dashboard</div>
           <div class="topbar-date" id="page-date"></div>
         </div>
