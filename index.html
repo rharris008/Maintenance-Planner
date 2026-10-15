@@ -15,6 +15,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
+/* ════ RESET & CSS VARIABLES ════ */
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
   --bg:#0d1117;--surface:#161b22;--surface2:#21262d;--border:#30363d;
@@ -28,6 +29,7 @@
   --fd:'Barlow Condensed',sans-serif;--fb:'Barlow',sans-serif;
   --r:8px;--nav:224px;
 }
+/* ════ APP SHELL & SIDEBAR ════ */
 html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--fb);font-size:14px;overflow:hidden}
 #app{display:flex;height:100vh}
 .sidebar{width:var(--nav);background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;z-index:20;transition:transform .25s}
@@ -51,6 +53,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 .topbar-title{font-family:var(--fd);font-size:22px;font-weight:700;letter-spacing:.5px}
 .topbar-date{font-size:11px;color:var(--muted)}
 .content{flex:1;overflow-y:auto;padding:20px 24px}
+/* ════ RESPONSIVE / MOBILE ════ */
 @media(max-width:768px){
   .sidebar{position:fixed;inset:0 auto 0 0;transform:translateX(-100%);z-index:100}
   .sidebar.open{transform:translateX(0)}
@@ -62,6 +65,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
   .overlay{display:block!important}
 }
 .overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:99}
+/* ════ CARDS & STAT TILES ════ */
 .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:18px}
 .card-title{font-family:var(--fd);font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:12px}
 .stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px}
@@ -71,12 +75,14 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 .stat.ok-card{border-color:var(--green);background:rgba(34,197,94,.06)}
 .stat-num{font-family:var(--fd);font-size:40px;font-weight:800;line-height:1}
 .stat-label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-top:4px}
+/* ════ TABLES ════ */
 .tbl{width:100%;border-collapse:collapse;font-size:13px}
 .tbl th{padding:9px 12px;text-align:left;font-family:var(--fd);font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--border);white-space:nowrap}
 .tbl td{padding:8px 12px;border-bottom:1px solid rgba(48,54,61,.5);vertical-align:middle}
 .tbl tr:last-child td{border-bottom:none}
 .tbl tr.row-click:hover td{background:rgba(255,255,255,.03);cursor:pointer}
 .tbl-wrap{overflow-x:auto}
+/* ════ BADGES & MACHINE CARDS ════ */
 .badge{display:inline-block;padding:2px 7px;border-radius:3px;font-size:10px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;font-family:var(--fd);white-space:nowrap}
 .machine-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
 .mcard{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:14px;cursor:pointer;transition:all .15s;border-left:4px solid transparent}
@@ -84,6 +90,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 .mcard.sel{border-left-color:var(--accent)!important;background:rgba(240,180,41,.05)}
 .mcard-name{font-family:var(--fd);font-size:15px;font-weight:700;margin-bottom:4px;line-height:1.2}
 .mcard-meta{font-size:11px;color:var(--muted);display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+/* ════ FORMS & INPUTS ════ */
 .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .fg{display:flex;flex-direction:column;gap:5px}
 .fg.full{grid-column:1/-1}
@@ -92,6 +99,7 @@ input,select,textarea{background:var(--surface2);border:1px solid var(--border);
 input:focus,select:focus,textarea:focus{border-color:var(--accent)}
 textarea{resize:vertical;min-height:72px}
 select option{background:var(--surface2)}
+/* ════ BUTTONS ════ */
 .btn{display:inline-flex;align-items:center;gap:6px;padding:9px 16px;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;border:none;transition:all .15s;font-family:var(--fb)}
 .btn-primary{background:var(--accent);color:#000}
 .btn-primary:hover{background:#fbbf24}
@@ -102,6 +110,7 @@ select option{background:var(--surface2)}
 .btn-ghost{background:transparent;color:var(--text);border:1px solid var(--border)}
 .btn-ghost:hover{background:var(--surface2)}
 .btn-sm{padding:6px 11px;font-size:12px}
+/* ════ FILTERS & TABS ════ */
 .filter-row{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;align-items:center}
 .filter-row input{flex:1;min-width:160px}
 .filter-row select{width:160px}
@@ -113,6 +122,7 @@ select option{background:var(--surface2)}
 .drow:last-child{border-bottom:none}
 .dkey{color:var(--muted);font-weight:500;flex-shrink:0}
 .dval{font-weight:500;text-align:right;word-break:break-word}
+/* ════ TOAST & SPINNER ════ */
 #toast{position:fixed;bottom:24px;right:24px;padding:12px 20px;border-radius:8px;font-weight:600;font-size:13px;z-index:300;display:none;animation:slideUp .3s ease}
 #toast.success{background:var(--green);color:#000}
 #toast.error{background:var(--red);color:#fff}
@@ -124,6 +134,7 @@ select option{background:var(--surface2)}
 .empty{text-align:center;padding:40px 20px;color:var(--muted);font-size:13px}
 .two-col{display:grid;grid-template-columns:1fr 1fr;gap:16px}
 @media(max-width:900px){.two-col{grid-template-columns:1fr}}
+/* ════ CONNECTION STATUS & MODAL ════ */
 .conn-status{display:flex;align-items:center;gap:6px;font-size:11px}
 .conn-dot{width:7px;height:7px;border-radius:50%;background:var(--green)}
 .conn-dot.err{background:var(--red)}
@@ -237,7 +248,9 @@ select option{background:var(--surface2)}
 </style>
 </head>
 <body>
+<!-- ══════ SECTION: App Shell ══════ -->
 <div id="app">
+<!-- ══════ SECTION: Sidebar Navigation ══════ -->
   <div class="sidebar" id="sidebar">
     <div class="logo" onclick="navigate('dashboard')" title="Back to Dashboard" style="cursor:pointer;">
       <img src="abh-logo.png" alt="ABH" style="width:100%;max-width:140px;height:auto;margin-bottom:6px;">
@@ -249,7 +262,9 @@ select option{background:var(--surface2)}
       <div style="margin-top:4px">Australian Beverage Holdings · v3.0</div>
     </div>
   </div>
+<!-- ══════ SECTION: Mobile Overlay ══════ -->
   <div class="overlay" id="overlay" onclick="closeSidebar()"></div>
+<!-- ══════ SECTION: Main Content Area ══════ -->
   <div class="main">
     <div class="topbar">
       <div class="topbar-left">
@@ -266,7 +281,9 @@ select option{background:var(--surface2)}
     <div class="content" id="content"><div class="loading"><div class="spinner"></div> Connecting to database…</div></div>
   </div>
 </div>
+<!-- ══════ SECTION: Machine Modal (portal) ══════ -->
 <div id="machine-modal" style="display:none"></div>
+<!-- ══════ SECTION: Toast Notification ══════ -->
 <div id="toast"></div>
 
 <script>
@@ -427,9 +444,7 @@ function render(){
 
 function initDate(){ $('page-date').textContent=new Date().toLocaleDateString('en-AU',{weekday:'long',year:'numeric',month:'long',day:'numeric'}); }
 
-// ══════════════════════════════════════════════════════════
-// DASHBOARD
-// ══════════════════════════════════════════════════════════
+// ════ DASHBOARD ════
 function renderDashboard(){
   const openBD=state.workOrders.filter(w=>w.wo_type==='Breakdown'&&w.status==='Open');
   const totalDT=state.workOrders.reduce((s,w)=>s+(parseFloat(w.downtime_hours)||0),0);
@@ -464,9 +479,7 @@ function renderDashboard(){
   $('content').innerHTML=html;
 }
 
-// ══════════════════════════════════════════════════════════
-// PREVENTIVE MAINTENANCE — DATE-AWARE WITH COMPLETIONS
-// ══════════════════════════════════════════════════════════
+// ════ PREVENTIVE MAINTENANCE ════
 function renderPMSchedule(){
   const now=new Date();
   const dow=now.getDay(); // 0=Sun,1=Mon
@@ -720,9 +733,7 @@ function updatePMProgress(type){
 }
 
 
-// ══════════════════════════════════════════════════════════
-// COMPLETION AUDIT
-// ══════════════════════════════════════════════════════════
+// ════ COMPLETION AUDIT ════
 let auditSite='All', auditLine='All', auditRange='30', auditSearch='', auditExpanded={};
 
 async function renderAudit(){
@@ -887,9 +898,7 @@ async function renderAudit(){
   `;
 }
 
-// ══════════════════════════════════════════════════════════
-// MACHINES
-// ══════════════════════════════════════════════════════════
+// ════ MACHINES ════
 let machineSearch='',machineSite='All',machineTab='tasks',selectedMachine=null,machineXlsxPreview=null,machineImportView=false;
 
 function renderMachines(){
@@ -1170,9 +1179,7 @@ function renderMachinePanel(){
   </div>`;
 }
 
-// ══════════════════════════════════════════════════════════
-// LOG PM
-// ══════════════════════════════════════════════════════════
+// ════ LOG PM ════
 let pmForm={machineId:'',taskId:'',tech:'',date:todayStr(),duration:'',notes:''};
 
 function renderLogPM(){
@@ -1203,9 +1210,7 @@ async function submitPM(){
   renderLogPM();
 }
 
-// ══════════════════════════════════════════════════════════
-// BREAKDOWN
-// ══════════════════════════════════════════════════════════
+// ════ BREAKDOWN ════
 let bdForm={machineId:'',priority:'High',desc:'',tech:'',duration:'',downtime:'',rootCause:'',action:'',date:todayStr(),isSafety:false,failureMode:'',failureComponent:''};
 
 function renderBreakdown(){
@@ -1254,9 +1259,7 @@ async function submitBreakdown(){
   renderNav();renderBreakdown();
 }
 
-// ══════════════════════════════════════════════════════════
-// SPARE PARTS
-// ══════════════════════════════════════════════════════════
+// ════ SPARE PARTS ════
 let stockSearch='',stockFilter='All',editingPart=null,editQty='',editReason='Adjustment';
 let stockView='list'; // 'list' | 'add' | 'import'
 let newPartForm={part_code:'',name:'',machine_id:'',criticality:'High',min_qty:'1',max_qty:'5',current_qty:'0',bin_location:'',is_consumable:false};
@@ -1585,9 +1588,7 @@ async function saveStock(partId,currentQty){
   editingPart=null;showToast('Stock updated.');renderNav();renderStock();
 }
 
-// ══════════════════════════════════════════════════════════
-// WORK ORDERS
-// ══════════════════════════════════════════════════════════
+// ════ WORK ORDERS ════
 let woSearch='',woType='All',woStatus='All',selectedWO=null;
 
 function renderWorkOrders(){
@@ -1627,9 +1628,7 @@ function renderWODetail(){
   </div>`;
 }
 
-// ══════════════════════════════════════════════════════════
-// COMPLIANCE
-// ══════════════════════════════════════════════════════════
+// ════ COMPLIANCE ════
 async function renderCompliance(){
   $('content').innerHTML='<div class="loading"><div class="spinner"></div> Loading…</div>';
   const {data,error}=await sb.from('statutory_requirements').select('*').eq('is_active',true).order('next_due_date');
@@ -1653,9 +1652,7 @@ async function renderCompliance(){
 }
 
 
-// ══════════════════════════════════════════════════════════
-// STAFF REGISTER
-// ══════════════════════════════════════════════════════════
+// ════ STAFF REGISTER ════
 let staffSearch='', staffFilter='Employed', staffSite='All', staffLine='All', staffEditId=null;
 let staffForm={employee_id:'',name:'',role:'Operator',site_id:'',line_type:'all',is_active:true,employment_status:'Employed',can_approve_wo:false};
 
@@ -1860,9 +1857,7 @@ async function toggleStaffActive(id, newActive){
   renderStaff();
 }
 
-// ══════════════════════════════════════════════════════════
-// SETUP
-// ══════════════════════════════════════════════════════════
+// ════ SETUP ════
 function renderSetup(){
   $('content').innerHTML=`<div style="max-width:680px;display:flex;flex-direction:column;gap:16px">
 
